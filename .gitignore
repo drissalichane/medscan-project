@@ -13,3 +13,5 @@
 .externalNativeBuild
 .cxx
 local.properties
+/medscan/
+/medicaments-morocco-main/

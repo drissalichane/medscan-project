@@ -50,13 +50,30 @@ import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
 
+import com.example.ocr.network.backend.BackendApiClient;
+import com.example.ocr.network.backend.BackendMedicationService;
+import com.example.ocr.model.BackendMedicationResult;
+
+import com.example.ocr.network.medicamentma.MedicamentMaApiClient;
+import com.example.ocr.network.medicamentma.MedicamentMaService;
+
+import java.util.List;
+
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import androidx.appcompat.app.AlertDialog;
+
 public class MainActivity extends AppCompatActivity {
     private static final int CAMERA_PERMISSION_CODE = 100;
     private ImageView imagePreview;
     private TextView textResult;
     private TextView textMedicationInfo;
+    private FloatingActionButton fabActions;
     private String currentPhotoPath;
     private MedicationService medicationService;
+    private BackendMedicationService backendMedicationService;
+    private MedicamentMaService medicamentMaService;
+
+    private StringBuilder medicationInfoBuilder = new StringBuilder();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -64,13 +81,26 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         medicationService = ApiClient.getRetrofitInstance().create(MedicationService.class);
+        backendMedicationService = BackendApiClient.getRetrofitInstance().create(BackendMedicationService.class);
+        medicamentMaService = MedicamentMaApiClient.getRetrofitInstance().create(MedicamentMaService.class);
 
         Button buttonCapture = findViewById(R.id.buttonCapture);
         imagePreview = findViewById(R.id.imagePreview);
         textResult = findViewById(R.id.textResult);
         textMedicationInfo = findViewById(R.id.textMedicationInfo);
+        fabActions = findViewById(R.id.fabActions);
+
+        fabActions.setOnClickListener(v -> {
+            if (medicationInfoBuilder.length() == 0) {
+                showMessageDialog("No medication information available.");
+            } else {
+                showMessageDialog(medicationInfoBuilder.toString());
+            }
+        });
 
         buttonCapture.setOnClickListener(v -> {
+            medicationInfoBuilder.setLength(0);
+            textMedicationInfo.setText("");
             if (checkCameraPermission()) {
                 openCamera();
             } else {
@@ -203,6 +233,8 @@ public class MainActivity extends AppCompatActivity {
 
         for (String word : validWords) {
             fetchMedicationInfo(word);
+            fetchMedicationInfoFromBackend(word);
+           // fetchMedicationInfoFromMedicamentMa(word);
         }
     }
 
@@ -216,16 +248,16 @@ public class MainActivity extends AppCompatActivity {
             public void onResponse(Call<OpenFdaResponse> call, Response<OpenFdaResponse> response) {
                 if (response.isSuccessful() && response.body() != null && response.body().results != null && !response.body().results.isEmpty()) {
                     MedicationResult result = response.body().results.get(0);
-                    textMedicationInfo.append("\nValid Medication: " + medicationName);
+                    medicationInfoBuilder.append("\nValid Medication: ").append(medicationName).append(" (from OpenFDA)");
 
                     if (result.indications_and_usage != null)
-                        textMedicationInfo.append("\nIndications: " + result.indications_and_usage);
+                        medicationInfoBuilder.append("\nIndications: ").append(String.join(", ", result.indications_and_usage));
                     if (result.warnings != null)
-                        textMedicationInfo.append("\nWarnings: " + result.warnings);
+                        medicationInfoBuilder.append("\nWarnings: ").append(String.join(", ", result.warnings));
                     if (result.adverse_reactions != null)
-                        textMedicationInfo.append("\nAdverse Reactions: " + result.adverse_reactions);
+                        medicationInfoBuilder.append("\nAdverse Reactions: ").append(String.join(", ", result.adverse_reactions));
                 } else {
-                    textMedicationInfo.append("\nNo matches found for: " + medicationName);
+                    medicationInfoBuilder.append("\nNo matches found for: ").append(medicationName);
                 }
             }
 
@@ -234,6 +266,68 @@ public class MainActivity extends AppCompatActivity {
                 Log.e("OpenFDA", "API call failed", t);
             }
         });
+    }
+
+    // New method to fetch medication info from backend
+    private void fetchMedicationInfoFromBackend(String medicationName) {
+        backendMedicationService.getAllMedications().enqueue(new Callback<List<BackendMedicationResult>>() {
+            @Override
+            public void onResponse(Call<List<BackendMedicationResult>> call, Response<List<BackendMedicationResult>> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    List<BackendMedicationResult> medications = response.body();
+                    boolean found = false;
+                    for (BackendMedicationResult med : medications) {
+                        if (med.getName() != null && med.getName().equalsIgnoreCase(medicationName)) {
+                            found = true;
+                            medicationInfoBuilder.append("\nValid Medication: ").append(med.getName()).append(" (from Backend)");
+                            if (med.getSideEffects() != null)
+                                medicationInfoBuilder.append("\nSide Effects: ").append(med.getSideEffects());
+                            if (med.getInteractions() != null)
+                                medicationInfoBuilder.append("\nInteractions: ").append(med.getInteractions());
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        medicationInfoBuilder.append("\nNo matches found for: ").append(medicationName);
+                    }
+                } else {
+                    medicationInfoBuilder.append("\nNo matches found for: ").append(medicationName);
+                }
+            }
+
+            @Override
+            public void onFailure(Call<List<BackendMedicationResult>> call, Throwable t) {
+                Log.e("BackendAPI", "API call failed", t);
+            }
+        });
+    }
+
+    // New method to fetch medication info from medicament.ma backend
+    private void fetchMedicationInfoFromMedicamentMa(String medicationName) {
+        medicamentMaService.getMedicationInfo(medicationName).enqueue(new Callback<String>() {
+            @Override
+            public void onResponse(Call<String> call, Response<String> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    String data = response.body();
+                    medicationInfoBuilder.append("\nMedicament.ma data for ").append(medicationName).append(":\n").append(data);
+                } else {
+                    medicationInfoBuilder.append("\nNo medicament.ma data found for: ").append(medicationName);
+                }
+            }
+
+            @Override
+            public void onFailure(Call<String> call, Throwable t) {
+                Log.e("MedicamentMaAPI", "API call failed", t);
+            }
+        });
+    }
+
+    private void showMessageDialog(String message) {
+        new AlertDialog.Builder(this)
+                .setTitle("Medication Information")
+                .setMessage(message)
+                .setPositiveButton("OK", null)
+                .show();
     }
 
 

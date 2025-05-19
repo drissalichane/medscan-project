@@ -41,9 +41,13 @@ dependencies {
     implementation("com.squareup.retrofit2:retrofit:2.9.0") // Retrofit
     implementation("com.squareup.retrofit2:converter-gson:2.9.0") // Gson Converter
     implementation("com.squareup.okhttp3:logging-interceptor:4.10.0") // Logging Interceptor (optional)
-    implementation("com.google.mlkit:text-recognition:16.0.0") // ML Kit OCR
+
     implementation("androidx.core:core-ktx:1.12.0") // Ensure AndroidX compatibility
     implementation("com.google.android.material:material:1.10.0") // Material UI (optional)
+    implementation("androidx.activity:activity-ktx:1.7.2") // Activity KTX for ActivityResultLauncher
+    implementation("androidx.exifinterface:exifinterface:1.3.6") // ExifInterface for image orientationdv
+    implementation("com.google.mlkit:text-recognition:16.0.0") // ML Kit OCR
+
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)
 }
