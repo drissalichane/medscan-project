@@ -120,6 +120,16 @@ public class ChatbotActivity extends AppCompatActivity {
         triggerScroll = findViewById(R.id.triggerScroll);
         ageGroupScroll = findViewById(R.id.ageGroupScroll);
         allergyScroll = findViewById(R.id.allergyScroll);
+
+        // Set up send button for direct messages
+        sendButton.setOnClickListener(v -> {
+            String message = messageInput.getText().toString().trim();
+            if (!message.isEmpty()) {
+                addUserMessage(message);
+                messageInput.setText("");
+                processDirectMessage(message);
+            }
+        });
     }
 
     private void setupRecyclerView() {
@@ -373,6 +383,40 @@ public class ChatbotActivity extends AppCompatActivity {
             public void onFailure(Exception e) {
                 addBotMessage("Sorry, I couldn't process your request: " + e.getMessage());
                 addBotMessage("Please try again by clicking the 'Reset All' button.");
+            }
+        });
+    }
+
+    private void processDirectMessage(String message) {
+        // Check if the message is health-related
+        String prompt = "Is this message health or medical related? Answer with only 'yes' or 'no': " + message;
+        
+        GeminiHelper geminiHelper = new GeminiHelper();
+        geminiHelper.getMedicalAdvice(prompt, new GeminiHelper.GeminiCallback() {
+            @Override
+            public void onSuccess(String response) {
+                if (response.toLowerCase().contains("yes")) {
+                    // If health-related, get a brief medical response
+                    String medicalPrompt = "Provide a brief (2-3 sentences) medical advice for this health-related question: " + message;
+                    geminiHelper.getMedicalAdvice(medicalPrompt, new GeminiHelper.GeminiCallback() {
+                        @Override
+                        public void onSuccess(String medicalResponse) {
+                            addBotMessage(medicalResponse);
+                        }
+
+                        @Override
+                        public void onFailure(Exception e) {
+                            addBotMessage("Sorry, I couldn't process your request. Please try again.");
+                        }
+                    });
+                } else {
+                    addBotMessage("I only answer health-related subjects. Please ask me about medical or health concerns.");
+                }
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                addBotMessage("Sorry, I couldn't process your request. Please try again.");
             }
         });
     }
