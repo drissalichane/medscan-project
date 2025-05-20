@@ -16,43 +16,43 @@ import androidx.core.content.ContextCompat;
 
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.maps.CameraUpdateFactory;
+import com.google.android.gms.maps.GoogleMap;
+import com.google.android.gms.maps.OnMapReadyCallback;
+import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.MarkerOptions;
+import android.location.Geocoder;
+import android.location.Address;
+import java.io.IOException;
+import java.util.List;
+
 import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
 
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
-import org.osmdroid.config.Configuration;
-import org.osmdroid.tileprovider.tilesource.TileSourceFactory;
-import org.osmdroid.util.GeoPoint;
-import org.osmdroid.views.MapView;
-import org.osmdroid.views.overlay.Marker;
-import org.osmdroid.views.overlay.infowindow.InfoWindow;
 
 import java.io.BufferedReader;
-import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
-import java.text.Normalizer;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-public class NearestDoctorActivity extends AppCompatActivity {
+public class NearestDoctorActivity extends AppCompatActivity implements OnMapReadyCallback {
     private static final int LOCATION_PERMISSION_REQUEST_CODE = 1;
-    static final String TAG = "OpenStreetMap";
-    private MapView map;
+    static final String TAG = "GoogleMap";
+    private GoogleMap mMap;
     private FusedLocationProviderClient fusedLocationClient;
     private ChipGroup doctorTypesChipGroup;
     private ExecutorService executorService;
-    private String currentCity = "Marrakech"; // Default city
+    private String currentCity = "Marrakech";
     
     private final Map<String, String> doctorTypes = new HashMap<String, String>() {{
         put("General Practitioner", "medecin-generaliste");
@@ -72,36 +72,27 @@ public class NearestDoctorActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_nearest_doctor);
 
-        // Initialize OSMDroid
-        Configuration.getInstance().setUserAgentValue(getPackageName());
-        Configuration.getInstance().setOsmdroidTileCache(getExternalFilesDir(null));
-
-        // Initialize executor service for network calls
-        executorService = Executors.newSingleThreadExecutor();
-
         // Set up toolbar
         Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
         getSupportActionBar().setDisplayHomeAsUpEnabled(true);
         getSupportActionBar().setTitle("Find Nearest Doctors");
 
+        // Initialize executor service for network calls
+        executorService = Executors.newSingleThreadExecutor();
+
         // Initialize location services
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
-
-        // Set up map
-        map = findViewById(R.id.map);
-        map.setTileSource(TileSourceFactory.MAPNIK);
-        map.setMultiTouchControls(true);
-        map.getController().setZoom(18.0);
-        map.setMinZoomLevel(4.0);
-        map.setMaxZoomLevel(19.0);
 
         // Set up doctor type chips
         doctorTypesChipGroup = findViewById(R.id.doctorTypesChipGroup);
         setupDoctorTypeChips();
 
-        // Request location permission and enable location
-        enableMyLocation();
+        // Set up Google Map
+        SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map);
+        if (mapFragment != null) {
+            mapFragment.getMapAsync(this);
+        }
     }
 
     private void setupDoctorTypeChips() {
@@ -122,14 +113,18 @@ public class NearestDoctorActivity extends AppCompatActivity {
         });
     }
 
+    @Override
+    public void onMapReady(GoogleMap googleMap) {
+        mMap = googleMap;
+        enableMyLocation();
+    }
+
     private void enableMyLocation() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
                 == PackageManager.PERMISSION_GRANTED) {
-            map.getController().setZoom(15.0);
-            Log.d(TAG, "Location enabled on map");
+            mMap.setMyLocationEnabled(true);
             getCurrentLocation();
         } else {
-            Log.d(TAG, "Requesting location permission");
             ActivityCompat.requestPermissions(this,
                     new String[]{Manifest.permission.ACCESS_FINE_LOCATION},
                     LOCATION_PERMISSION_REQUEST_CODE);
@@ -142,194 +137,118 @@ public class NearestDoctorActivity extends AppCompatActivity {
             Log.e(TAG, "Location permission not granted");
             return;
         }
-        
-        Log.d(TAG, "Getting current location");
         fusedLocationClient.getLastLocation().addOnSuccessListener(this, location -> {
             if (location != null) {
-                GeoPoint currentPoint = new GeoPoint(location.getLatitude(), location.getLongitude());
-                Log.d(TAG, "Current location: " + currentPoint.getLatitude() + ", " + currentPoint.getLongitude());
-                
-                // Clear existing overlays
-                map.getOverlays().clear();
-                
-                // Add marker for current location
-                Marker currentLocationMarker = new Marker(map);
-                currentLocationMarker.setPosition(currentPoint);
-                currentLocationMarker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM);
-                currentLocationMarker.setTitle("Your Location");
-                map.getOverlays().add(currentLocationMarker);
-                
-                // Center map on current location
-                map.getController().animateTo(currentPoint);
-                map.getController().setZoom(18.0); // Zoom to street level
+                LatLng currentLatLng = new LatLng(location.getLatitude(), location.getLongitude());
+                Log.d(TAG, "Current location: " + currentLatLng.latitude + ", " + currentLatLng.longitude);
+                mMap.clear();
+                mMap.addMarker(new MarkerOptions().position(currentLatLng).title("Your Location"));
+                mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, 15f));
             } else {
                 Log.e(TAG, "Could not get current location");
-                Toast.makeText(this, "Could not get your location. Please check your GPS settings.", 
-                    Toast.LENGTH_LONG).show();
+                Toast.makeText(this, "Could not get your location. Please check your GPS settings.",
+                        Toast.LENGTH_LONG).show();
             }
         });
     }
 
     private void searchNearbyDoctors(String doctorType) {
-        if (map == null) {
+        if (mMap == null) {
             Log.e(TAG, "Map is not initialized");
             return;
         }
-
         Log.d(TAG, "Searching for doctor type: " + doctorType);
-        map.getOverlays().clear();
-        
+        mMap.clear();
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
                 != PackageManager.PERMISSION_GRANTED) {
             Log.e(TAG, "Location permission not granted for nearby search");
             return;
         }
-
         fusedLocationClient.getLastLocation().addOnSuccessListener(this, location -> {
             if (location != null) {
-                Log.d(TAG, "Starting nearby search at location: " + 
-                    location.getLatitude() + ", " + location.getLongitude());
-                
-                // Add current location marker
-                addCurrentLocationMarker(location);
-                
-                // Search for doctors using doctori.ma
+                LatLng currentLatLng = new LatLng(location.getLatitude(), location.getLongitude());
+                mMap.addMarker(new MarkerOptions().position(currentLatLng).title("Your Location"));
+                mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, 15f));
                 searchDoctorsOnDoctori(doctorType);
             } else {
                 Log.e(TAG, "Could not get location for nearby search");
-                Toast.makeText(this, "Could not get your location. Please check your GPS settings.", 
-                    Toast.LENGTH_LONG).show();
+                Toast.makeText(this, "Could not get your location. Please check your GPS settings.",
+                        Toast.LENGTH_LONG).show();
             }
         });
-    }
-
-    private void addCurrentLocationMarker(Location location) {
-        GeoPoint currentPoint = new GeoPoint(location.getLatitude(), location.getLongitude());
-        Marker currentLocationMarker = new Marker(map);
-        currentLocationMarker.setPosition(currentPoint);
-        currentLocationMarker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM);
-        currentLocationMarker.setTitle("Your Location");
-        map.getOverlays().add(currentLocationMarker);
-        map.getController().animateTo(currentPoint);
     }
 
     private void searchDoctorsOnDoctori(String doctorType) {
         executorService.execute(() -> {
             try {
-                // Construct the URL for doctori.ma
-                String url = String.format("https://www.doctori.ma/fr/medecin/%s/%s", 
-                    doctorType.toLowerCase(), currentCity.toLowerCase());
-                
+                String url = String.format("https://www.doctori.ma/fr/medecin/%s/%s",
+                        doctorType.toLowerCase(), currentCity.toLowerCase());
                 Log.d(TAG, "Searching doctors at URL: " + url);
-                
-                // Fetch the webpage
                 Document doc = Jsoup.connect(url)
-                    .userAgent("Mozilla/5.0")
-                    .timeout(10000)
-                    .get();
-                
-                // Find all doctor address elements
+                        .userAgent("Mozilla/5.0")
+                        .timeout(10000)
+                        .get();
                 Elements addressElements = doc.select("span.adresse_doc");
-                
-                // Process first 5 doctors
                 int count = 0;
                 for (Element addressElement : addressElements) {
-                    if (count >= 1) break;
-                    
+                    if (count >= 5) break;
                     String address = addressElement.text().trim();
                     Log.d(TAG, "Found doctor address: " + address);
-                    
-                    // Geocode the address to get coordinates
-                    geocodeAddress(address, doctorType);
+                    geocodeAddressWithAI(address, doctorType);
                     count++;
                 }
-                
                 if (count == 0) {
                     runOnUiThread(() -> {
-                        Toast.makeText(this, "No doctors found in " + currentCity, 
-                            Toast.LENGTH_SHORT).show();
+                        Toast.makeText(this, "No doctors found in " + currentCity,
+                                Toast.LENGTH_SHORT).show();
                     });
                 }
-                
-            } catch (IOException e) {
+            } catch (Exception e) {
                 Log.e(TAG, "Error searching doctors on doctori.ma: " + e.getMessage());
                 runOnUiThread(() -> {
-                    Toast.makeText(this, "Error searching for doctors: " + e.getMessage(), 
-                        Toast.LENGTH_LONG).show();
+                    Toast.makeText(this, "Error searching for doctors: " + e.getMessage(),
+                            Toast.LENGTH_LONG).show();
                 });
             }
         });
     }
-    private String simplifyAddress(String rawAddress) {
-        // Remove accents and extra punctuation
-        String clean = Normalizer.normalize(rawAddress, Normalizer.Form.NFD)
-                .replaceAll("[\\p{InCombiningDiacriticalMarks}]", "") // remove accents
-                .replaceAll("(?i)\\b(bloc|resid|et|n°|apt|apartment|immeuble)\\b", "") // remove common extras
-                .replaceAll("[^a-zA-Z0-9 ,]", "") // remove punctuation
-                .replaceAll("\\s{2,}", " ") // collapse spaces
-                .trim();
-        return clean;
+
+    private void geocodeAddressWithAI(String rawAddress, String doctorType) {
+        executorService.execute(() -> {
+            try {
+                // Clean up the address by trimming and normalizing
+                String cleanedAddress = rawAddress.trim();
+
+                // Use Android's Geocoder class for geocoding
+                Geocoder geocoder = new Geocoder(this);
+                List<Address> addresses = geocoder.getFromLocationName(cleanedAddress, 1);
+
+                if (addresses != null && !addresses.isEmpty()) {
+                    Address address = addresses.get(0);
+                    double lat = address.getLatitude();
+                    double lng = address.getLongitude();
+                    
+                    Log.d(TAG, "Placing marker: " + doctorType + " - " + cleanedAddress + " at (" + lat + ", " + lng + ")");
+                    runOnUiThread(() -> {
+                        if (mMap != null) {
+                            LatLng position = new LatLng(lat, lng);
+                            mMap.addMarker(new MarkerOptions()
+                                .position(position)
+                                .title(doctorType + " - " + cleanedAddress));
+                        }
+                    });
+                } else {
+                    Log.w(TAG, "Geocoding failed for address: " + cleanedAddress);
+                }
+            } catch (IOException e) {
+                Log.e(TAG, "Error geocoding address: " + rawAddress + " - " + e.getMessage());
+            }
+        });
     }
-
-
-    private void geocodeAddress(String address, String doctorType) {
-        try {
-            // Simplify the address (you may adjust your normalization as needed)
-            String simplified = simplifyAddress(address);
-            String query;
-            // If the simplified address already contains the current city, don’t append it again.
-            if (simplified.toLowerCase().contains(currentCity.toLowerCase())) {
-                query = simplified + ", Morocco";
-            } else {
-                query = simplified + ", " + currentCity + ", Morocco";
-            }
-            String encodedAddress = java.net.URLEncoder.encode(query, "UTF-8");
-
-            Log.d(TAG, "Geocoding query: " + query);
-            Log.d(TAG, "Encoded URL parameter: " + encodedAddress);
-
-            // Build the full URL for Nominatim search
-            URL url = new URL("https://nominatim.openstreetmap.org/search?format=json&q=" + encodedAddress);
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-            conn.setRequestMethod("GET");
-            conn.setRequestProperty("User-Agent", "MedScan/1.0");
-
-            // Read response
-            BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()));
-            StringBuilder response = new StringBuilder();
-            String line;
-            while ((line = reader.readLine()) != null) {
-                response.append(line);
-            }
-            reader.close();
-
-            JSONArray results = new JSONArray(response.toString());
-            if (results.length() > 0) {
-                JSONObject location = results.getJSONObject(0);
-                double lat = Double.parseDouble(location.getString("lat"));
-                double lon = Double.parseDouble(location.getString("lon"));
-
-                Log.d(TAG, "Placing marker: " + doctorType + " - " + address + " at (" + lat + ", " + lon + ")");
-                runOnUiThread(() -> {
-                    Marker doctorMarker = new Marker(map);
-                    doctorMarker.setPosition(new GeoPoint(lat, lon));
-                    doctorMarker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM);
-                    doctorMarker.setTitle(doctorType + " - " + address);
-                    map.getOverlays().add(doctorMarker);
-                    map.invalidate();
-                });
-            } else {
-                Log.w(TAG, "Geocoding failed for address simplified : " + simplified + " and query : " + query);
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "Error geocoding address: " + address + " - " + e.getMessage());
-        }
-    }
-
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
-                                         @NonNull int[] grantResults) {
+                                           @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == LOCATION_PERMISSION_REQUEST_CODE) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
@@ -350,18 +269,6 @@ public class NearestDoctorActivity extends AppCompatActivity {
             return true;
         }
         return super.onOptionsItemSelected(item);
-    }
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-        map.onResume();
-    }
-
-    @Override
-    protected void onPause() {
-        super.onPause();
-        map.onPause();
     }
 
     @Override
