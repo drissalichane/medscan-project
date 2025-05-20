@@ -194,7 +194,7 @@ public class NearestDoctorActivity extends AppCompatActivity implements OnMapRea
                     if (count >= 5) break;
                     String address = addressElement.text().trim();
                     Log.d(TAG, "Found doctor address: " + address);
-                    geocodeAddressWithAI(address, doctorType);
+                    geocodeAddress(address, doctorType);
                     count++;
                 }
                 if (count == 0) {
@@ -213,7 +213,7 @@ public class NearestDoctorActivity extends AppCompatActivity implements OnMapRea
         });
     }
 
-    private void geocodeAddressWithAI(String rawAddress, String doctorType) {
+    private void geocodeAddress(String rawAddress, String doctorType) {
         executorService.execute(() -> {
             try {
                 // Clean up the address by trimming and normalizing
