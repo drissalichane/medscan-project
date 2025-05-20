@@ -32,12 +32,19 @@ android {
 }
 
 dependencies {
-
+    implementation("androidx.camera:camera-camera2:1.3.0")
+    implementation("androidx.camera:camera-lifecycle:1.3.0")
+    implementation("androidx.camera:camera-view:1.3.0")
+    implementation("androidx.camera:camera-extensions:1.3.0")
     implementation(libs.appcompat)
     implementation(libs.material)
     implementation(libs.activity)
     implementation(libs.constraintlayout)
     testImplementation(libs.junit)
+    implementation("com.google.android.gms:play-services-maps:18.2.0")
+    implementation("com.google.android.gms:play-services-location:21.2.0")
+    implementation("com.google.android.libraries.places:places:3.4.0")
+    implementation("androidx.drawerlayout:drawerlayout:1.1.1")
     implementation("com.squareup.retrofit2:retrofit:2.9.0") // Retrofit
     implementation("com.squareup.retrofit2:converter-gson:2.9.0") // Gson Converter
     implementation("com.squareup.okhttp3:logging-interceptor:4.10.0") // Logging Interceptor (optional)
@@ -46,4 +53,21 @@ dependencies {
     implementation("com.google.android.material:material:1.10.0") // Material UI (optional)
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)
+    implementation("com.squareup.okhttp3:okhttp:4.10.0") // OkHttp core for Gemini API
+  implementation("org.osmdroid:osmdroid-android:6.1.16") {
+        exclude(group = "com.j256.ormlite", module = "ormlite-android")
+        exclude(group = "com.j256.ormlite", module = "ormlite-core")
+    }
+    implementation("org.osmdroid:osmdroid-wms:6.1.16") {
+        exclude(group = "com.j256.ormlite", module = "ormlite-android")
+        exclude(group = "com.j256.ormlite", module = "ormlite-core")
+    }
+    implementation("org.osmdroid:osmdroid-mapsforge:6.1.16") {
+        exclude(group = "com.j256.ormlite", module = "ormlite-android")
+        exclude(group = "com.j256.ormlite", module = "ormlite-core")
+    }
+    implementation("org.osmdroid:osmdroid-geopackage:6.1.16") {
+        exclude(group = "com.j256.ormlite", module = "ormlite-android")
+        exclude(group = "com.j256.ormlite", module = "ormlite-core")
+    }
 }

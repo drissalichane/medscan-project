@@ -10,6 +10,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.provider.MediaStore;
 import android.util.Log;
+import android.view.MenuItem;
 import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.TextView;
@@ -18,13 +19,17 @@ import android.widget.Toast;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
+import androidx.appcompat.app.ActionBarDrawerToggle;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.Toolbar;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
+import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.exifinterface.media.ExifInterface;
 
 import com.example.ocr.model.MedicationResult;
+import com.google.android.material.navigation.NavigationView;
 import com.google.mlkit.vision.common.InputImage;
 import com.google.mlkit.vision.text.Text;
 import com.google.mlkit.vision.text.TextRecognition;
@@ -50,18 +55,40 @@ import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements NavigationView.OnNavigationItemSelectedListener {
     private static final int CAMERA_PERMISSION_CODE = 100;
     private ImageView imagePreview;
     private TextView textResult;
     private TextView textMedicationInfo;
     private String currentPhotoPath;
     private MedicationService medicationService;
+    private DrawerLayout drawerLayout;
+    private NavigationView navigationView;
+    private Toolbar toolbar;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        // Set up toolbar
+        toolbar = findViewById(R.id.toolbar);
+        setSupportActionBar(toolbar);
+        getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+        getSupportActionBar().setHomeAsUpIndicator(R.drawable.ic_menu);
+
+        // Set up navigation drawer
+        drawerLayout = findViewById(R.id.drawerLayout);
+        navigationView = findViewById(R.id.navView);
+        navigationView.setItemIconTintList(null);
+        navigationView.setNavigationItemSelectedListener(this);
+
+        ActionBarDrawerToggle toggle = new ActionBarDrawerToggle(
+                this, drawerLayout, toolbar,
+                R.string.navigation_drawer_open,
+                R.string.navigation_drawer_close);
+        drawerLayout.addDrawerListener(toggle);
+        toggle.syncState();
 
         medicationService = ApiClient.getRetrofitInstance().create(MedicationService.class);
 
@@ -77,6 +104,29 @@ public class MainActivity extends AppCompatActivity {
                 requestCameraPermission();
             }
         });
+    }
+
+    @Override
+    public boolean onNavigationItemSelected(@NonNull MenuItem item) {
+        int id = item.getItemId();
+        
+        if (id == R.id.nav_scan) {
+            // Already on scan screen
+            drawerLayout.closeDrawers();
+        } else if (id == R.id.nav_medications) {
+            // TODO: Implement medications list screen
+            Toast.makeText(this, "Medications list coming soon!", Toast.LENGTH_SHORT).show();
+            drawerLayout.closeDrawers();
+        } else if (id == R.id.nav_chatbot) {
+            startActivity(new Intent(this, ChatbotActivity.class));
+            drawerLayout.closeDrawers();
+        } else if (id == R.id.nav_nearest_doctor) {
+            Intent intent = new Intent(this, NearestDoctorActivity.class);
+            startActivity(intent);
+        }
+        
+        drawerLayout.closeDrawers();
+        return true;
     }
 
     private boolean checkCameraPermission() {
@@ -173,15 +223,32 @@ public class MainActivity extends AppCompatActivity {
                 .addOnSuccessListener(visionText -> {
                     String scannedText = visionText.getText();
                     textResult.setText(scannedText.isEmpty() ? "No text detected." : scannedText);
-                    for (String word : scannedText.split("\\s+")) {
-                        processScannedText(word);
-                    }
+
+                    // Use GeminiHelper to extract and translate medication name
+                    GeminiHelper geminiHelper = new GeminiHelper();
+                    geminiHelper.extractMedicationName(scannedText, new GeminiHelper.GeminiCallback() {
+                        @Override
+                        public void onSuccess(String medicationName) {
+                            runOnUiThread(() -> {
+                                textResult.append("\n\nDetected medication: " + medicationName);
+                                fetchMedicationInfo(medicationName);
+                            });
+                        }
+
+                        @Override
+                        public void onFailure(Exception e) {
+                            runOnUiThread(() -> {
+                                textResult.append("\n\nFailed to extract medication name: " + e.getMessage());
+                            });
+                        }
+                    });
                 })
                 .addOnFailureListener(e -> {
                     Log.e("OCR", "Text recognition failed", e);
                     Toast.makeText(this, "Failed to recognize text", Toast.LENGTH_SHORT).show();
                 });
     }
+
     private List<String> extractValidWords(String scannedText) {
         List<String> validWords = new ArrayList<>();
 
@@ -198,6 +265,7 @@ public class MainActivity extends AppCompatActivity {
         }
         return validWords;
     }
+
     private void processScannedText(String scannedText) {
         List<String> validWords = extractValidWords(scannedText);
 
@@ -205,7 +273,6 @@ public class MainActivity extends AppCompatActivity {
             fetchMedicationInfo(word);
         }
     }
-
 
     private void fetchMedicationInfo(String medicationName) {
         String query = "spl_product_data_elements:" + medicationName + "*";
@@ -235,8 +302,4 @@ public class MainActivity extends AppCompatActivity {
             }
         });
     }
-
-
-
-
 }
