@@ -20,6 +20,7 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.ActionBarDrawerToggle;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 import androidx.core.app.ActivityCompat;
@@ -28,7 +29,13 @@ import androidx.core.content.FileProvider;
 import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.exifinterface.media.ExifInterface;
 
+import com.example.ocr.model.BackendMedicationResult;
 import com.example.ocr.model.MedicationResult;
+import com.example.ocr.network.backend.BackendApiClient;
+import com.example.ocr.network.backend.BackendMedicationService;
+import com.example.ocr.network.medicamentma.MedicamentMaApiClient;
+import com.example.ocr.network.medicamentma.MedicamentMaService;
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.navigation.NavigationView;
 import com.google.mlkit.vision.common.InputImage;
 import com.google.mlkit.vision.text.Text;
@@ -60,11 +67,16 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     private ImageView imagePreview;
     private TextView textResult;
     private TextView textMedicationInfo;
+    private FloatingActionButton fabActions;
     private String currentPhotoPath;
     private MedicationService medicationService;
     private DrawerLayout drawerLayout;
     private NavigationView navigationView;
     private Toolbar toolbar;
+    private BackendMedicationService backendMedicationService;
+    private MedicamentMaService medicamentMaService;
+
+    private StringBuilder medicationInfoBuilder = new StringBuilder();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -91,13 +103,26 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         toggle.syncState();
 
         medicationService = ApiClient.getRetrofitInstance().create(MedicationService.class);
+        backendMedicationService = BackendApiClient.getRetrofitInstance().create(BackendMedicationService.class);
+        medicamentMaService = MedicamentMaApiClient.getRetrofitInstance().create(MedicamentMaService.class);
 
         Button buttonCapture = findViewById(R.id.buttonCapture);
         imagePreview = findViewById(R.id.imagePreview);
         textResult = findViewById(R.id.textResult);
         textMedicationInfo = findViewById(R.id.textMedicationInfo);
+        fabActions = findViewById(R.id.fabActions);
+
+        fabActions.setOnClickListener(v -> {
+            if (medicationInfoBuilder.length() == 0) {
+                showMessageDialog("No medication information available.");
+            } else {
+                showMessageDialog(medicationInfoBuilder.toString());
+            }
+        });
 
         buttonCapture.setOnClickListener(v -> {
+            medicationInfoBuilder.setLength(0);
+            textMedicationInfo.setText("");
             if (checkCameraPermission()) {
                 openCamera();
             } else {
@@ -109,7 +134,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     @Override
     public boolean onNavigationItemSelected(@NonNull MenuItem item) {
         int id = item.getItemId();
-        
+
         if (id == R.id.nav_scan) {
             // Already on scan screen
             drawerLayout.closeDrawers();
@@ -124,7 +149,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             Intent intent = new Intent(this, NearestDoctorActivity.class);
             startActivity(intent);
         }
-        
+
         drawerLayout.closeDrawers();
         return true;
     }
@@ -248,7 +273,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                     Toast.makeText(this, "Failed to recognize text", Toast.LENGTH_SHORT).show();
                 });
     }
-
     private List<String> extractValidWords(String scannedText) {
         List<String> validWords = new ArrayList<>();
 
@@ -265,14 +289,16 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         }
         return validWords;
     }
-
     private void processScannedText(String scannedText) {
         List<String> validWords = extractValidWords(scannedText);
 
         for (String word : validWords) {
             fetchMedicationInfo(word);
+            fetchMedicationInfoFromBackend(word);
+           // fetchMedicationInfoFromMedicamentMa(word);
         }
     }
+
 
     private void fetchMedicationInfo(String medicationName) {
         String query = "spl_product_data_elements:" + medicationName + "*";
@@ -302,4 +328,70 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             }
         });
     }
+
+    // New method to fetch medication info from backend
+    private void fetchMedicationInfoFromBackend(String medicationName) {
+        backendMedicationService.getAllMedications().enqueue(new Callback<List<BackendMedicationResult>>() {
+            @Override
+            public void onResponse(Call<List<BackendMedicationResult>> call, Response<List<BackendMedicationResult>> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    List<BackendMedicationResult> medications = response.body();
+                    boolean found = false;
+                    for (BackendMedicationResult med : medications) {
+                        if (med.getName() != null && med.getName().equalsIgnoreCase(medicationName)) {
+                            found = true;
+                            medicationInfoBuilder.append("\nValid Medication: ").append(med.getName()).append(" (from Backend)");
+                            if (med.getSideEffects() != null)
+                                medicationInfoBuilder.append("\nSide Effects: ").append(med.getSideEffects());
+                            if (med.getInteractions() != null)
+                                medicationInfoBuilder.append("\nInteractions: ").append(med.getInteractions());
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        medicationInfoBuilder.append("\nNo matches found for: ").append(medicationName);
+                    }
+                } else {
+                    medicationInfoBuilder.append("\nNo matches found for: ").append(medicationName);
+                }
+            }
+
+            @Override
+            public void onFailure(Call<List<BackendMedicationResult>> call, Throwable t) {
+                Log.e("BackendAPI", "API call failed", t);
+            }
+        });
+    }
+
+    // New method to fetch medication info from medicament.ma backend
+    private void fetchMedicationInfoFromMedicamentMa(String medicationName) {
+        medicamentMaService.getMedicationInfo(medicationName).enqueue(new Callback<String>() {
+            @Override
+            public void onResponse(Call<String> call, Response<String> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    String data = response.body();
+                    medicationInfoBuilder.append("\nMedicament.ma data for ").append(medicationName).append(":\n").append(data);
+                } else {
+                    medicationInfoBuilder.append("\nNo medicament.ma data found for: ").append(medicationName);
+                }
+            }
+
+            @Override
+            public void onFailure(Call<String> call, Throwable t) {
+                Log.e("MedicamentMaAPI", "API call failed", t);
+            }
+        });
+    }
+
+    private void showMessageDialog(String message) {
+        new AlertDialog.Builder(this)
+                .setTitle("Medication Information")
+                .setMessage(message)
+                .setPositiveButton("OK", null)
+                .show();
+    }
+
+
+
+
 }

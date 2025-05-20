@@ -41,6 +41,8 @@ dependencies {
     implementation(libs.activity)
     implementation(libs.constraintlayout)
     testImplementation(libs.junit)
+    implementation("androidx.activity:activity-ktx:1.7.2") // Activity KTX for ActivityResultLauncher
+    implementation("androidx.exifinterface:exifinterface:1.3.6")
     implementation("com.google.android.gms:play-services-maps:18.2.0")
     implementation("com.google.android.gms:play-services-location:21.2.0")
     implementation("com.google.android.libraries.places:places:3.4.0")
