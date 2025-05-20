@@ -55,6 +55,7 @@ dependencies {
     implementation("com.google.android.material:material:1.10.0") // Material UI (optional)
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)
+    implementation("org.jsoup:jsoup:1.17.2")
     implementation("com.squareup.okhttp3:okhttp:4.10.0") // OkHttp core for Gemini API
   implementation("org.osmdroid:osmdroid-android:6.1.16") {
         exclude(group = "com.j256.ormlite", module = "ormlite-android")
@@ -72,4 +73,5 @@ dependencies {
         exclude(group = "com.j256.ormlite", module = "ormlite-android")
         exclude(group = "com.j256.ormlite", module = "ormlite-core")
     }
+
 }

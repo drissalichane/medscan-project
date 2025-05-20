@@ -22,6 +22,10 @@ import com.google.android.material.chip.ChipGroup;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
 import org.osmdroid.config.Configuration;
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory;
 import org.osmdroid.util.GeoPoint;
@@ -34,6 +38,8 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.net.URLEncoder;
+import java.text.Normalizer;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
@@ -46,18 +52,19 @@ public class NearestDoctorActivity extends AppCompatActivity {
     private FusedLocationProviderClient fusedLocationClient;
     private ChipGroup doctorTypesChipGroup;
     private ExecutorService executorService;
+    private String currentCity = "Marrakech"; // Default city
     
     private final Map<String, String> doctorTypes = new HashMap<String, String>() {{
-        put("General Practitioner", "doctor");
-        put("Dentist", "dentist");
-        put("Cardiologist", "cardiologist");
-        put("Pediatrician", "pediatrician");
-        put("Dermatologist", "dermatologist");
-        put("Ophthalmologist", "eye doctor");
-        put("Orthopedist", "orthopedic");
-        put("Gynecologist", "gynecologist");
-        put("Neurologist", "neurologist");
-        put("Psychiatrist", "psychiatrist");
+        put("General Practitioner", "medecin-generaliste");
+        put("Dentist", "dentiste");
+        put("Cardiologist", "cardiologue");
+        put("Pediatrician", "pediatre");
+        put("Dermatologist", "dermatologue");
+        put("Ophthalmologist", "ophtalmologue");
+        put("Orthopedist", "orthopediste");
+        put("Gynecologist", "gynecologue");
+        put("Neurologist", "neurologue");
+        put("Psychiatrist", "psychiatre");
     }};
 
     @Override
@@ -186,8 +193,8 @@ public class NearestDoctorActivity extends AppCompatActivity {
                 // Add current location marker
                 addCurrentLocationMarker(location);
                 
-                // Search for doctors using Overpass API
-                searchDoctorsWithOverpass(location, doctorType);
+                // Search for doctors using doctori.ma
+                searchDoctorsOnDoctori(doctorType);
             } else {
                 Log.e(TAG, "Could not get location for nearby search");
                 Toast.makeText(this, "Could not get your location. Please check your GPS settings.", 
@@ -206,89 +213,46 @@ public class NearestDoctorActivity extends AppCompatActivity {
         map.getController().animateTo(currentPoint);
     }
 
-    private void searchDoctorsWithOverpass(Location location, String doctorType) {
+    private void searchDoctorsOnDoctori(String doctorType) {
         executorService.execute(() -> {
             try {
-                // Build Overpass API query
-                String query = String.format(
-                    "[out:json][timeout:25];" +
-                    "(" +
-                    "  node[\"amenity\"=\"clinic\"](around:5000,%f,%f);" +
-                    "  node[\"amenity\"=\"doctors\"](around:5000,%f,%f);" +
-                    "  node[\"healthcare\"=\"doctor\"](around:5000,%f,%f);" +
-                    ");" +
-                    "out body;>;out skel qt;",
-                    location.getLatitude(), location.getLongitude(),
-                    location.getLatitude(), location.getLongitude(),
-                    location.getLatitude(), location.getLongitude()
-                );
-
-                // Encode query for URL
-                String encodedQuery = java.net.URLEncoder.encode(query, "UTF-8");
-                URL url = new URL("https://overpass-api.de/api/interpreter?data=" + encodedQuery);
-
-                // Make HTTP request
-                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                conn.setRequestMethod("GET");
-                conn.setRequestProperty("User-Agent", "MedScan/1.0");
-
-                // Read response
-                BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()));
-                StringBuilder response = new StringBuilder();
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    response.append(line);
+                // Construct the URL for doctori.ma
+                String url = String.format("https://www.doctori.ma/fr/medecin/%s/%s", 
+                    doctorType.toLowerCase(), currentCity.toLowerCase());
+                
+                Log.d(TAG, "Searching doctors at URL: " + url);
+                
+                // Fetch the webpage
+                Document doc = Jsoup.connect(url)
+                    .userAgent("Mozilla/5.0")
+                    .timeout(10000)
+                    .get();
+                
+                // Find all doctor address elements
+                Elements addressElements = doc.select("span.adresse_doc");
+                
+                // Process first 5 doctors
+                int count = 0;
+                for (Element addressElement : addressElements) {
+                    if (count >= 1) break;
+                    
+                    String address = addressElement.text().trim();
+                    Log.d(TAG, "Found doctor address: " + address);
+                    
+                    // Geocode the address to get coordinates
+                    geocodeAddress(address, doctorType);
+                    count++;
                 }
-                reader.close();
-
-                // Parse JSON response
-                JSONObject jsonResponse = new JSONObject(response.toString());
-                JSONArray elements = jsonResponse.getJSONArray("elements");
-
-                // Process results on UI thread
-                runOnUiThread(() -> {
-                    if (elements.length() > 0) {
-                        for (int i = 0; i < elements.length(); i++) {
-                            try {
-                                JSONObject element = elements.getJSONObject(i);
-                                if (element.has("lat") && element.has("lon")) {
-                                    double lat = element.getDouble("lat");
-                                    double lon = element.getDouble("lon");
-                                    
-                                    // Create marker for doctor location
-                                    Marker doctorMarker = new Marker(map);
-                                    doctorMarker.setPosition(new GeoPoint(lat, lon));
-                                    doctorMarker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM);
-                                    
-                                    // Set title from tags if available
-                                    if (element.has("tags")) {
-                                        JSONObject tags = element.getJSONObject("tags");
-                                        if (tags.has("name")) {
-                                            doctorMarker.setTitle(tags.getString("name"));
-                                        } else {
-                                            doctorMarker.setTitle(doctorType + " Clinic");
-                                        }
-                                    } else {
-                                        doctorMarker.setTitle(doctorType + " Clinic");
-                                    }
-                                    
-                                    map.getOverlays().add(doctorMarker);
-                                }
-                            } catch (JSONException e) {
-                                Log.e(TAG, "Error parsing doctor location: " + e.getMessage());
-                            }
-                        }
-                        map.invalidate(); // Refresh map
-                        Toast.makeText(this, "Found " + elements.length() + " medical facilities nearby", 
+                
+                if (count == 0) {
+                    runOnUiThread(() -> {
+                        Toast.makeText(this, "No doctors found in " + currentCity, 
                             Toast.LENGTH_SHORT).show();
-                    } else {
-                        Toast.makeText(this, "No medical facilities found nearby", 
-                            Toast.LENGTH_SHORT).show();
-                    }
-                });
-
-            } catch (Exception e) {
-                Log.e(TAG, "Error searching for doctors: " + e.getMessage());
+                    });
+                }
+                
+            } catch (IOException e) {
+                Log.e(TAG, "Error searching doctors on doctori.ma: " + e.getMessage());
                 runOnUiThread(() -> {
                     Toast.makeText(this, "Error searching for doctors: " + e.getMessage(), 
                         Toast.LENGTH_LONG).show();
@@ -296,6 +260,72 @@ public class NearestDoctorActivity extends AppCompatActivity {
             }
         });
     }
+    private String simplifyAddress(String rawAddress) {
+        // Remove accents and extra punctuation
+        String clean = Normalizer.normalize(rawAddress, Normalizer.Form.NFD)
+                .replaceAll("[\\p{InCombiningDiacriticalMarks}]", "") // remove accents
+                .replaceAll("(?i)\\b(bloc|resid|et|n°|apt|apartment|immeuble)\\b", "") // remove common extras
+                .replaceAll("[^a-zA-Z0-9 ,]", "") // remove punctuation
+                .replaceAll("\\s{2,}", " ") // collapse spaces
+                .trim();
+        return clean;
+    }
+
+
+    private void geocodeAddress(String address, String doctorType) {
+        try {
+            // Simplify the address (you may adjust your normalization as needed)
+            String simplified = simplifyAddress(address);
+            String query;
+            // If the simplified address already contains the current city, don’t append it again.
+            if (simplified.toLowerCase().contains(currentCity.toLowerCase())) {
+                query = simplified + ", Morocco";
+            } else {
+                query = simplified + ", " + currentCity + ", Morocco";
+            }
+            String encodedAddress = java.net.URLEncoder.encode(query, "UTF-8");
+
+            Log.d(TAG, "Geocoding query: " + query);
+            Log.d(TAG, "Encoded URL parameter: " + encodedAddress);
+
+            // Build the full URL for Nominatim search
+            URL url = new URL("https://nominatim.openstreetmap.org/search?format=json&q=" + encodedAddress);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("GET");
+            conn.setRequestProperty("User-Agent", "MedScan/1.0");
+
+            // Read response
+            BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+            StringBuilder response = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                response.append(line);
+            }
+            reader.close();
+
+            JSONArray results = new JSONArray(response.toString());
+            if (results.length() > 0) {
+                JSONObject location = results.getJSONObject(0);
+                double lat = Double.parseDouble(location.getString("lat"));
+                double lon = Double.parseDouble(location.getString("lon"));
+
+                Log.d(TAG, "Placing marker: " + doctorType + " - " + address + " at (" + lat + ", " + lon + ")");
+                runOnUiThread(() -> {
+                    Marker doctorMarker = new Marker(map);
+                    doctorMarker.setPosition(new GeoPoint(lat, lon));
+                    doctorMarker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM);
+                    doctorMarker.setTitle(doctorType + " - " + address);
+                    map.getOverlays().add(doctorMarker);
+                    map.invalidate();
+                });
+            } else {
+                Log.w(TAG, "Geocoding failed for address simplified : " + simplified + " and query : " + query);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error geocoding address: " + address + " - " + e.getMessage());
+        }
+    }
+
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
