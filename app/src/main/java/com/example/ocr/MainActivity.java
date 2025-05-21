@@ -307,7 +307,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             
             // Fetch additional info
             fetchMedicationInfo(word);
-            fetchMedicationInfoFromBackend(word);
         }
     }
 
@@ -327,40 +326,40 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                     
                     // Store all information in the builder for later use
                     if (result.purpose != null) {
-                        medicationInfoBuilder.append("PURPOSE:").append(String.join(", ", result.purpose)).append("\n");
+                        medicationInfoBuilder.append("Purpose:").append(String.join(", ", result.purpose)).append("\n");
                     }
                     if (result.indications_and_usage != null) {
-                        medicationInfoBuilder.append("INDICATIONS:").append(String.join(", ", result.indications_and_usage)).append("\n");
+                        medicationInfoBuilder.append("Indications:").append(String.join(", ", result.indications_and_usage)).append("\n");
                     }
                     if (result.warnings != null) {
-                        medicationInfoBuilder.append("WARNINGS:").append(String.join(", ", result.warnings)).append("\n");
+                        medicationInfoBuilder.append("Warnings:").append(String.join(", ", result.warnings)).append("\n");
                     }
                     if (result.precautions != null) {
-                        medicationInfoBuilder.append("PRECAUTIONS:").append(String.join(", ", result.precautions)).append("\n");
+                        medicationInfoBuilder.append("Precautions:").append(String.join(", ", result.precautions)).append("\n");
                     }
                     if (result.general_precautions != null) {
-                        medicationInfoBuilder.append("GENERAL_PRECAUTIONS:").append(String.join(", ", result.general_precautions)).append("\n");
+                        medicationInfoBuilder.append("General precautions:").append(String.join(", ", result.general_precautions)).append("\n");
                     }
                     if (result.adverse_reactions != null) {
-                        medicationInfoBuilder.append("ADVERSE_REACTIONS:").append(String.join(", ", result.adverse_reactions)).append("\n");
+                        medicationInfoBuilder.append("Adverse reactions:").append(String.join(", ", result.adverse_reactions)).append("\n");
                     }
                     if (result.overdosage != null) {
-                        medicationInfoBuilder.append("OVERDOSAGE:").append(String.join(", ", result.overdosage)).append("\n");
+                        medicationInfoBuilder.append("Overdosage:").append(String.join(", ", result.overdosage)).append("\n");
                     }
                     if (result.do_not_use != null) {
-                        medicationInfoBuilder.append("DO_NOT_USE:").append(String.join(", ", result.do_not_use)).append("\n");
+                        medicationInfoBuilder.append("Do not use:").append(String.join(", ", result.do_not_use)).append("\n");
                     }
                     if (result.stop_use != null) {
-                        medicationInfoBuilder.append("STOP_USE:").append(String.join(", ", result.stop_use)).append("\n");
+                        medicationInfoBuilder.append("Stop use:").append(String.join(", ", result.stop_use)).append("\n");
                     }
                     if (result.when_use != null) {
-                        medicationInfoBuilder.append("WHEN_USE:").append(String.join(", ", result.when_use)).append("\n");
+                        medicationInfoBuilder.append("When to use:").append(String.join(", ", result.when_use)).append("\n");
                     }
                     if (result.ask_doctor != null) {
-                        medicationInfoBuilder.append("ASK_DOCTOR:").append(String.join(", ", result.ask_doctor)).append("\n");
+                        medicationInfoBuilder.append("Ask doctor:").append(String.join(", ", result.ask_doctor)).append("\n");
                     }
                     if (result.ask_doctor_or_pharmacist != null) {
-                        medicationInfoBuilder.append("ASK_DOCTOR_OR_PHARMACIST:").append(String.join(", ", result.ask_doctor_or_pharmacist)).append("\n");
+                        medicationInfoBuilder.append("Ask doctor or pharmacist:").append(String.join(", ", result.ask_doctor_or_pharmacist)).append("\n");
                     }
 
                     // Display basic information in the TextView

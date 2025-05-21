@@ -56,13 +56,13 @@ public class NearestDoctorActivity extends AppCompatActivity implements OnMapRea
     
     private final Map<String, String> doctorTypes = new HashMap<String, String>() {{
         put("General Practitioner", "medecin-generaliste");
-        put("Dentist", "dentiste");
+        put("Dentist", "chirurgien-dentiste");
         put("Cardiologist", "cardiologue");
         put("Pediatrician", "pediatre");
         put("Dermatologist", "dermatologue");
         put("Ophthalmologist", "ophtalmologue");
-        put("Orthopedist", "orthopediste");
-        put("Gynecologist", "gynecologue");
+        put("Orthopedist", "chirurgien-orthopediste-et-traumatologue");
+        put("Gynecologist", "gynecologue-obstetricien");
         put("Neurologist", "neurologue");
         put("Psychiatrist", "psychiatre");
     }};
