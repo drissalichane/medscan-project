@@ -55,6 +55,8 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.HashMap;
 
 import com.example.ocr.network.ApiClient;
 import com.example.ocr.network.MedicationService;
@@ -318,22 +320,76 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             public void onResponse(Call<OpenFdaResponse> call, Response<OpenFdaResponse> response) {
                 if (response.isSuccessful() && response.body() != null && response.body().results != null && !response.body().results.isEmpty()) {
                     MedicationResult result = response.body().results.get(0);
-                    textMedicationInfo.append("\nValid Medication: " + medicationName);
+                    
+                    // Clear previous content
+                    textMedicationInfo.setText("");
+                    medicationInfoBuilder.setLength(0);
+                    
+                    // Store all information in the builder for later use
+                    if (result.purpose != null) {
+                        medicationInfoBuilder.append("PURPOSE:").append(String.join(", ", result.purpose)).append("\n");
+                    }
+                    if (result.indications_and_usage != null) {
+                        medicationInfoBuilder.append("INDICATIONS:").append(String.join(", ", result.indications_and_usage)).append("\n");
+                    }
+                    if (result.warnings != null) {
+                        medicationInfoBuilder.append("WARNINGS:").append(String.join(", ", result.warnings)).append("\n");
+                    }
+                    if (result.precautions != null) {
+                        medicationInfoBuilder.append("PRECAUTIONS:").append(String.join(", ", result.precautions)).append("\n");
+                    }
+                    if (result.general_precautions != null) {
+                        medicationInfoBuilder.append("GENERAL_PRECAUTIONS:").append(String.join(", ", result.general_precautions)).append("\n");
+                    }
+                    if (result.adverse_reactions != null) {
+                        medicationInfoBuilder.append("ADVERSE_REACTIONS:").append(String.join(", ", result.adverse_reactions)).append("\n");
+                    }
+                    if (result.overdosage != null) {
+                        medicationInfoBuilder.append("OVERDOSAGE:").append(String.join(", ", result.overdosage)).append("\n");
+                    }
+                    if (result.do_not_use != null) {
+                        medicationInfoBuilder.append("DO_NOT_USE:").append(String.join(", ", result.do_not_use)).append("\n");
+                    }
+                    if (result.stop_use != null) {
+                        medicationInfoBuilder.append("STOP_USE:").append(String.join(", ", result.stop_use)).append("\n");
+                    }
+                    if (result.when_use != null) {
+                        medicationInfoBuilder.append("WHEN_USE:").append(String.join(", ", result.when_use)).append("\n");
+                    }
+                    if (result.ask_doctor != null) {
+                        medicationInfoBuilder.append("ASK_DOCTOR:").append(String.join(", ", result.ask_doctor)).append("\n");
+                    }
+                    if (result.ask_doctor_or_pharmacist != null) {
+                        medicationInfoBuilder.append("ASK_DOCTOR_OR_PHARMACIST:").append(String.join(", ", result.ask_doctor_or_pharmacist)).append("\n");
+                    }
 
-                    if (result.indications_and_usage != null)
-                        textMedicationInfo.append("\nIndications: " + result.indications_and_usage);
-                    if (result.warnings != null)
-                        textMedicationInfo.append("\nWarnings: " + result.warnings);
-                    if (result.adverse_reactions != null)
-                        textMedicationInfo.append("\nAdverse Reactions: " + result.adverse_reactions);
+                    // Display basic information in the TextView
+                    StringBuilder basicInfo = new StringBuilder();
+                    basicInfo.append("Medication: ").append(medicationName).append("\n\n");
+                    
+                    if (result.purpose != null && !result.purpose.isEmpty()) {
+                        basicInfo.append("Purpose: ").append(result.purpose.get(0)).append("\n\n");
+                    }
+                    if (result.indications_and_usage != null && !result.indications_and_usage.isEmpty()) {
+                        basicInfo.append("Usage: ").append(result.indications_and_usage.get(0)).append("\n\n");
+                    }
+                    if (result.warnings != null && !result.warnings.isEmpty()) {
+                        basicInfo.append("Warning: ").append(result.warnings.get(0)).append("\n\n");
+                    }
+                    
+                    textMedicationInfo.setText(basicInfo.toString());
+                    
+                    // Show a toast to indicate more information is available
+                    Toast.makeText(MainActivity.this, "Click the info button for more details", Toast.LENGTH_LONG).show();
                 } else {
-                    textMedicationInfo.append("\nNo matches found for: " + medicationName);
+                    textMedicationInfo.setText("No matches found for: " + medicationName);
                 }
             }
 
             @Override
             public void onFailure(Call<OpenFdaResponse> call, Throwable t) {
                 Log.e("OpenFDA", "API call failed", t);
+                textMedicationInfo.setText("Failed to fetch medication information");
             }
         });
     }
@@ -393,10 +449,50 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     private void showMessageDialog(String message) {
+        // Split the message into different sections
+        String[] sections = message.split("\n");
+        List<String> availableSections = new ArrayList<>();
+        Map<String, String> sectionContent = new HashMap<>();
+
+        for (String section : sections) {
+            if (section.contains(":")) {
+                String[] parts = section.split(":", 2);
+                if (parts.length == 2) {
+                    String title = parts[0].trim();
+                    String content = parts[1].trim();
+                    if (!content.isEmpty()) {
+                        availableSections.add(title);
+                        sectionContent.put(title, content);
+                    }
+                }
+            }
+        }
+
+        if (availableSections.isEmpty()) {
+            new AlertDialog.Builder(this)
+                    .setTitle("Medication Information")
+                    .setMessage("No detailed information available")
+                    .setPositiveButton("OK", null)
+                    .show();
+            return;
+        }
+
+        // Create buttons for each section
+        String[] sectionTitles = availableSections.toArray(new String[0]);
         new AlertDialog.Builder(this)
-                .setTitle("Medication Information")
-                .setMessage(message)
-                .setPositiveButton("OK", null)
+                .setTitle("Select Information Category")
+                .setItems(sectionTitles, (dialog, which) -> {
+                    String selectedTitle = sectionTitles[which];
+                    String content = sectionContent.get(selectedTitle);
+                    
+                    // Show the content in a new dialog
+                    new AlertDialog.Builder(this)
+                            .setTitle(selectedTitle)
+                            .setMessage(content)
+                            .setPositiveButton("OK", null)
+                            .show();
+                })
+                .setPositiveButton("Close", null)
                 .show();
     }
 }
