@@ -75,6 +75,7 @@ public class NearestDoctorActivity extends AppCompatActivity implements OnMapRea
         // Set up toolbar
         Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
+        toolbar.setBackgroundResource(R.color.primary_dark);
         getSupportActionBar().setDisplayHomeAsUpEnabled(true);
         getSupportActionBar().setTitle("Find Nearest Doctors");
 

@@ -3,6 +3,7 @@ package com.example.ocr;
 import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -52,6 +53,7 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
@@ -89,6 +91,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         // Set up toolbar
         toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
+        toolbar.setBackgroundResource(R.color.primary_dark);
         getSupportActionBar().setDisplayHomeAsUpEnabled(true);
         getSupportActionBar().setHomeAsUpIndicator(R.drawable.ic_menu);
 
@@ -261,7 +264,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                         public void onSuccess(String medicationName) {
                             runOnUiThread(() -> {
                                 textResult.append("\n\nDetected medication: " + medicationName);
-                                processScannedText(medicationName);
+                                fetchMedicationInfo(medicationName);
                             });
                         }
 
@@ -296,21 +299,46 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         return validWords;
     }
 
-    private void processScannedText(String scannedText) {
-        List<String> validWords = extractValidWords(scannedText);
-        DatabaseHelper databaseHelper = new DatabaseHelper(this);
-        SQLiteDatabase db = databaseHelper.getWritableDatabase();
-
-        for (String word : validWords) {
-            // Save to database
-            databaseHelper.insertMedication(db, word, "Scanned medication", "Side effects will be updated when verified");
-            
-            // Fetch additional info
-            fetchMedicationInfo(word);
-        }
-    }
-
     private void fetchMedicationInfo(String medicationName) {
+        // First check if medication exists in local database
+        DatabaseHelper databaseHelper = new DatabaseHelper(this);
+        Cursor cursor = databaseHelper.getMedicationInfo(medicationName);
+        
+        if (cursor != null && cursor.moveToFirst()) {
+            // Get the data from cursor
+            String purpose = cursor.getString(cursor.getColumnIndex(DatabaseHelper.COLUMN_PURPOSE));
+            String usage = cursor.getString(cursor.getColumnIndex(DatabaseHelper.COLUMN_USAGE));
+            String warnings = cursor.getString(cursor.getColumnIndex(DatabaseHelper.COLUMN_WARNINGS));
+            
+            // Check if we have valid data (not placeholder data)
+            if (purpose != null && !purpose.isEmpty() && !purpose.contains("scanned medication") &&
+                usage != null && !usage.isEmpty() && !usage.contains("scanned medication") &&
+                warnings != null && !warnings.isEmpty() && !warnings.contains("side effect will be updated")) {
+                
+                // We have valid cached data, display it
+                StringBuilder basicInfo = new StringBuilder();
+                basicInfo.append("Medication: ").append(medicationName).append("\n\n");
+                
+                if (!purpose.isEmpty()) {
+                    basicInfo.append("Purpose: ").append(purpose.split("; ")[0]).append("\n\n");
+                }
+                if (!usage.isEmpty()) {
+                    basicInfo.append("Usage: ").append(usage.split("; ")[0]).append("\n\n");
+                }
+                if (!warnings.isEmpty()) {
+                    basicInfo.append("Warning: ").append(warnings.split("; ")[0]).append("\n\n");
+                }
+                
+                textMedicationInfo.setText(basicInfo.toString());
+                Toast.makeText(MainActivity.this, "Showing cached information", Toast.LENGTH_SHORT).show();
+                cursor.close();
+                return;
+            }
+            // If we have placeholder data, close cursor and continue to OpenFDA
+            cursor.close();
+        }
+
+        // If not in database or has placeholder data, fetch from OpenFDA
         String query = "spl_product_data_elements:" + medicationName + "*";
 
         Call<OpenFdaResponse> call = medicationService.getMedicationInfo(query);
@@ -326,46 +354,43 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                     
                     // Store all information in the builder for later use
                     if (result.purpose != null) {
-                        medicationInfoBuilder.append("Purpose:").append(String.join(", ", result.purpose)).append("\n");
+                        medicationInfoBuilder.append("Purpose:").append(String.join("; ", result.purpose)).append("\n");
                     }
                     if (result.indications_and_usage != null) {
-                        medicationInfoBuilder.append("Indications:").append(String.join(", ", result.indications_and_usage)).append("\n");
+                        medicationInfoBuilder.append("Indications:").append(String.join("; ", result.indications_and_usage)).append("\n");
                     }
                     if (result.warnings != null) {
-                        medicationInfoBuilder.append("Warnings:").append(String.join(", ", result.warnings)).append("\n");
+                        medicationInfoBuilder.append("Warnings:").append(String.join("; ", result.warnings)).append("\n");
                     }
                     if (result.precautions != null) {
-                        medicationInfoBuilder.append("Precautions:").append(String.join(", ", result.precautions)).append("\n");
-                    }
-                    if (result.general_precautions != null) {
-                        medicationInfoBuilder.append("General precautions:").append(String.join(", ", result.general_precautions)).append("\n");
+                        medicationInfoBuilder.append("Precautions:").append(String.join("; ", result.precautions)).append("\n");
                     }
                     if (result.adverse_reactions != null) {
-                        medicationInfoBuilder.append("Adverse reactions:").append(String.join(", ", result.adverse_reactions)).append("\n");
+                        medicationInfoBuilder.append("Adverse reactions:").append(String.join("; ", result.adverse_reactions)).append("\n");
                     }
                     if (result.overdosage != null) {
-                        medicationInfoBuilder.append("Overdosage:").append(String.join(", ", result.overdosage)).append("\n");
+                        medicationInfoBuilder.append("Overdosage:").append(String.join("; ", result.overdosage)).append("\n");
                     }
                     if (result.do_not_use != null) {
-                        medicationInfoBuilder.append("Do not use:").append(String.join(", ", result.do_not_use)).append("\n");
+                        medicationInfoBuilder.append("Do not use:").append(String.join("; ", result.do_not_use)).append("\n");
                     }
                     if (result.stop_use != null) {
-                        medicationInfoBuilder.append("Stop use:").append(String.join(", ", result.stop_use)).append("\n");
+                        medicationInfoBuilder.append("Stop use:").append(String.join("; ", result.stop_use)).append("\n");
                     }
                     if (result.when_use != null) {
-                        medicationInfoBuilder.append("When to use:").append(String.join(", ", result.when_use)).append("\n");
+                        medicationInfoBuilder.append("When to use:").append(String.join("; ", result.when_use)).append("\n");
                     }
                     if (result.ask_doctor != null) {
-                        medicationInfoBuilder.append("Ask doctor:").append(String.join(", ", result.ask_doctor)).append("\n");
+                        medicationInfoBuilder.append("Ask doctor:").append(String.join("; ", result.ask_doctor)).append("\n");
                     }
                     if (result.ask_doctor_or_pharmacist != null) {
-                        medicationInfoBuilder.append("Ask doctor or pharmacist:").append(String.join(", ", result.ask_doctor_or_pharmacist)).append("\n");
+                        medicationInfoBuilder.append("Ask doctor or pharmacist:").append(String.join("; ", result.ask_doctor_or_pharmacist)).append("\n");
                     }
 
                     // Display basic information in the TextView
                     StringBuilder basicInfo = new StringBuilder();
                     basicInfo.append("Medication: ").append(medicationName).append("\n\n");
-                    
+
                     if (result.purpose != null && !result.purpose.isEmpty()) {
                         basicInfo.append("Purpose: ").append(result.purpose.get(0)).append("\n\n");
                     }
@@ -375,11 +400,39 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                     if (result.warnings != null && !result.warnings.isEmpty()) {
                         basicInfo.append("Warning: ").append(result.warnings.get(0)).append("\n\n");
                     }
-                    
+
                     textMedicationInfo.setText(basicInfo.toString());
-                    
+
+                    // Save to database after displaying
+                    SQLiteDatabase db = databaseHelper.getWritableDatabase();
+                    try {
+                        Log.d("SQL insert", "Attempting to insert medication: " + medicationName);
+                        Log.d("SQL insert", "Purpose: " + (result.purpose != null ? String.join("; ", result.purpose) : "null"));
+                        Log.d("SQL insert", "Usage: " + (result.indications_and_usage != null ? String.join("; ", result.indications_and_usage) : "null"));
+                        Log.d("SQL insert", "Warnings: " + (result.warnings != null ? String.join("; ", result.warnings) : "null"));
+                        
+                        long insertId = databaseHelper.insertMedication(db, medicationName, result);
+                        Log.d("SQL insert", "Insert successful with ID: " + insertId);
+                        
+                        // Verify the insert
+                        Cursor verifyCursor = databaseHelper.getMedicationInfo(medicationName);
+                        if (verifyCursor != null && verifyCursor.moveToFirst()) {
+                            Log.d("SQL insert", "Verified data in database:");
+                            Log.d("SQL insert", "Name: " + verifyCursor.getString(verifyCursor.getColumnIndex(DatabaseHelper.COLUMN_NAME)));
+                            Log.d("SQL insert", "Purpose: " + verifyCursor.getString(verifyCursor.getColumnIndex(DatabaseHelper.COLUMN_PURPOSE)));
+                            Log.d("SQL insert", "Usage: " + verifyCursor.getString(verifyCursor.getColumnIndex(DatabaseHelper.COLUMN_USAGE)));
+                            Log.d("SQL insert", "Warnings: " + verifyCursor.getString(verifyCursor.getColumnIndex(DatabaseHelper.COLUMN_WARNINGS)));
+                            verifyCursor.close();
+                        } else {
+                            Log.e("SQL insert", "Failed to verify inserted data");
+                        }
+                    } catch (Exception e) {
+                        Log.e("SQL insert", "Error inserting medication: " + e.getMessage());
+                        e.printStackTrace();
+                    }
+
                     // Show a toast to indicate more information is available
-                    Toast.makeText(MainActivity.this, "Click the info button for more details", Toast.LENGTH_LONG).show();
+                    Toast.makeText(MainActivity.this, "Medication information saved to cache", Toast.LENGTH_LONG).show();
                 } else {
                     textMedicationInfo.setText("No matches found for: " + medicationName);
                 }

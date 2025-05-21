@@ -1,6 +1,7 @@
 package com.example.ocr;
 
 import android.os.Bundle;
+import androidx.appcompat.widget.SearchView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -9,7 +10,7 @@ import androidx.appcompat.widget.Toolbar;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.example.ocr.adapter.MedicationAdapter;
+import com.example.ocr.adapter.BackendMedicationAdapter;
 import com.example.ocr.model.BackendMedicationResult;
 import com.example.ocr.network.backend.BackendApiClient;
 import com.example.ocr.network.backend.BackendMedicationService;
@@ -25,7 +26,7 @@ public class MyMedicationsActivity extends AppCompatActivity {
     private RecyclerView recyclerView;
     private TextView emptyView;
     private BackendMedicationService medicationService;
-    private MedicationAdapter adapter;
+    private BackendMedicationAdapter adapter;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -44,8 +45,23 @@ public class MyMedicationsActivity extends AppCompatActivity {
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
         
         // Initialize adapter
-        adapter = new MedicationAdapter(new ArrayList<>());
+        adapter = new BackendMedicationAdapter(new ArrayList<>());
         recyclerView.setAdapter(adapter);
+
+        // Set up search view
+        androidx.appcompat.widget.SearchView searchView = findViewById(R.id.searchView);
+        searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
+            @Override
+            public boolean onQueryTextSubmit(String query) {
+                return false;
+            }
+
+            @Override
+            public boolean onQueryTextChange(String newText) {
+                adapter.getFilter().filter(newText);
+                return false;
+            }
+        });
 
         // Initialize service
         medicationService = BackendApiClient.getRetrofitInstance().create(BackendMedicationService.class);

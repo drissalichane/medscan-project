@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_margin="4dp"
+    android:layout_margin="8dp"
     app:cardCornerRadius="8dp"
     app:cardElevation="4dp">
 
@@ -14,7 +14,7 @@
         android:padding="16dp">
 
         <TextView
-            android:id="@+id/textViewMedicationName"
+            android:id="@+id/textMedicationName"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:textSize="18sp"
@@ -22,31 +22,19 @@
             android:textColor="@android:color/black" />
 
         <TextView
+            android:id="@+id/textPurpose"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="Side Effects:"
-            android:textStyle="bold" />
+            android:textSize="14sp" />
 
         <TextView
-            android:id="@+id/textViewSideEffects"
+            android:id="@+id/textUsage"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="Interactions:"
-            android:textStyle="bold" />
-
-        <TextView
-            android:id="@+id/textViewInteractions"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp" />
+            android:layout_marginTop="4dp"
+            android:textSize="14sp" />
 
     </LinearLayout>
 
-</com.google.android.material.card.MaterialCardView> 
+</androidx.cardview.widget.CardView> 

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    app:itemIconTint="@null">
+   >
     <group android:checkableBehavior="single">
         <item
             android:id="@+id/nav_scan"
@@ -10,7 +10,7 @@
         <item
             android:id="@+id/nav_medications"
             android:icon="@android:drawable/ic_menu_sort_by_size"
-            android:title="My Medications" />
+            android:title="Most Used Medications" />
         <item
             android:id="@+id/nav_scanned_medications"
             android:icon="@android:drawable/ic_menu_recent_history"
@@ -18,7 +18,6 @@
         <item
             android:id="@+id/nav_chatbot"
             android:icon="@drawable/a"
-            app:iconTint="@null"
             android:title="Doctor Chatbot" />
         <item
             android:id="@+id/nav_nearest_doctor"
