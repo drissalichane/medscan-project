@@ -12,6 +12,10 @@
             android:icon="@android:drawable/ic_menu_sort_by_size"
             android:title="My Medications" />
         <item
+            android:id="@+id/nav_scanned_medications"
+            android:icon="@android:drawable/ic_menu_recent_history"
+            android:title="Scanned Medications" />
+        <item
             android:id="@+id/nav_chatbot"
             android:icon="@drawable/a"
             app:iconTint="@null"

@@ -3,6 +3,7 @@ package com.example.ocr;
 import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.database.sqlite.SQLiteDatabase;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Matrix;
@@ -139,8 +140,10 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             // Already on scan screen
             drawerLayout.closeDrawers();
         } else if (id == R.id.nav_medications) {
-            // TODO: Implement medications list screen
-            Toast.makeText(this, "Medications list coming soon!", Toast.LENGTH_SHORT).show();
+            startActivity(new Intent(this, MyMedicationsActivity.class));
+            drawerLayout.closeDrawers();
+        } else if (id == R.id.nav_scanned_medications) {
+            startActivity(new Intent(this, ScannedMedicationsActivity.class));
             drawerLayout.closeDrawers();
         } else if (id == R.id.nav_chatbot) {
             startActivity(new Intent(this, ChatbotActivity.class));
@@ -256,7 +259,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                         public void onSuccess(String medicationName) {
                             runOnUiThread(() -> {
                                 textResult.append("\n\nDetected medication: " + medicationName);
-                                fetchMedicationInfo(medicationName);
+                                processScannedText(medicationName);
                             });
                         }
 
@@ -273,6 +276,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                     Toast.makeText(this, "Failed to recognize text", Toast.LENGTH_SHORT).show();
                 });
     }
+
     private List<String> extractValidWords(String scannedText) {
         List<String> validWords = new ArrayList<>();
 
@@ -289,16 +293,21 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         }
         return validWords;
     }
+
     private void processScannedText(String scannedText) {
         List<String> validWords = extractValidWords(scannedText);
+        DatabaseHelper databaseHelper = new DatabaseHelper(this);
+        SQLiteDatabase db = databaseHelper.getWritableDatabase();
 
         for (String word : validWords) {
+            // Save to database
+            databaseHelper.insertMedication(db, word, "Scanned medication", "Side effects will be updated when verified");
+            
+            // Fetch additional info
             fetchMedicationInfo(word);
             fetchMedicationInfoFromBackend(word);
-           // fetchMedicationInfoFromMedicamentMa(word);
         }
     }
-
 
     private void fetchMedicationInfo(String medicationName) {
         String query = "spl_product_data_elements:" + medicationName + "*";
@@ -390,8 +399,4 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 .setPositiveButton("OK", null)
                 .show();
     }
-
-
-
-
 }

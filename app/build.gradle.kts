@@ -41,22 +41,18 @@ dependencies {
     implementation(libs.activity)
     implementation(libs.constraintlayout)
     testImplementation(libs.junit)
-    implementation("androidx.activity:activity-ktx:1.7.2") // Activity KTX for ActivityResultLauncher
+    implementation("androidx.activity:activity-ktx:1.7.2")
     implementation("androidx.exifinterface:exifinterface:1.3.6")
     implementation("com.google.android.gms:play-services-maps:18.2.0")
     implementation("com.google.android.gms:play-services-location:21.2.0")
     implementation("com.google.android.libraries.places:places:3.4.0")
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+
+    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
     implementation("androidx.drawerlayout:drawerlayout:1.1.1")
-    implementation("com.squareup.retrofit2:retrofit:2.9.0") // Retrofit
-    implementation("com.squareup.retrofit2:converter-gson:2.9.0") // Gson Converter
-    implementation("com.squareup.okhttp3:logging-interceptor:4.10.0") // Logging Interceptor (optional)
-    implementation("com.google.mlkit:text-recognition:16.0.0") // ML Kit OCR
-    implementation("androidx.core:core-ktx:1.12.0") // Ensure AndroidX compatibility
-    implementation("com.google.android.material:material:1.10.0") // Material UI (optional)
-    androidTestImplementation(libs.ext.junit)
-    androidTestImplementation(libs.espresso.core)
+    implementation("com.squareup.okhttp3:logging-interceptor:4.10.0")
+    implementation("com.google.mlkit:text-recognition:16.0.0")
+    implementation("androidx.core:core-ktx:1.12.0")
     implementation("org.jsoup:jsoup:1.17.2")
-    implementation("com.squareup.okhttp3:okhttp:4.10.0") // OkHttp core for Gemini API
-
-
+    implementation("com.squareup.okhttp3:okhttp:4.10.0")
 }
