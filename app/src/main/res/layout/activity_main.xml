@@ -102,7 +102,10 @@
                     android:elevation="4dp"
                     android:padding="16dp"
                     android:text="Medication details will appear here"
-                    android:textSize="16sp" />
+                    android:textSize="16sp"
+                    android:lineSpacingExtra="8dp"
+                    android:textColor="@android:color/black"
+                    android:gravity="start" />
 
             </LinearLayout>
 

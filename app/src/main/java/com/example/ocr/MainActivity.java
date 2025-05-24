@@ -300,33 +300,72 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     private void fetchMedicationInfo(String medicationName) {
+        Log.d("MedInfo", "Starting fetchMedicationInfo for: " + medicationName);
         // First check if medication exists in local database
         DatabaseHelper databaseHelper = new DatabaseHelper(this);
         Cursor cursor = databaseHelper.getMedicationInfo(medicationName);
         
+        Log.d("MedInfo", "Database query completed. Cursor null? " + (cursor == null));
+        
         if (cursor != null && cursor.moveToFirst()) {
+            Log.d("MedInfo", "Found medication in database");
             // Get the data from cursor
             String purpose = cursor.getString(cursor.getColumnIndex(DatabaseHelper.COLUMN_PURPOSE));
             String usage = cursor.getString(cursor.getColumnIndex(DatabaseHelper.COLUMN_USAGE));
             String warnings = cursor.getString(cursor.getColumnIndex(DatabaseHelper.COLUMN_WARNINGS));
+            
+            Log.d("MedInfo", "Retrieved from DB - Purpose: " + purpose);
+            Log.d("MedInfo", "Retrieved from DB - Usage: " + usage);
+            Log.d("MedInfo", "Retrieved from DB - Warnings: " + warnings);
             
             // Check if we have valid data (not placeholder data)
             if (purpose != null && !purpose.isEmpty() && !purpose.contains("scanned medication") &&
                 usage != null && !usage.isEmpty() && !usage.contains("scanned medication") &&
                 warnings != null && !warnings.isEmpty() && !warnings.contains("side effect will be updated")) {
                 
+                Log.d("MedInfo", "Data validation passed - proceeding with display");
                 // We have valid cached data, display it
                 StringBuilder basicInfo = new StringBuilder();
                 basicInfo.append("Medication: ").append(medicationName).append("\n\n");
                 
                 if (!purpose.isEmpty()) {
-                    basicInfo.append("Purpose: ").append(purpose.split("; ")[0]).append("\n\n");
+                    Log.d("MedInfo", "Processing purpose: " + purpose);
+                    basicInfo.append("\nPurpose:\n");
+                    String[] purposes = purpose.split("; ");
+                    Log.d("MedInfo", "Number of purpose items: " + purposes.length);
+                    for (String p : purposes) {
+                        if (!p.trim().isEmpty()) {
+                            Log.d("MedInfo", "Processing purpose item: " + p);
+                            basicInfo.append(formatMedInfoText("• " + p.trim())).append("\n");
+                        }
+                    }
+                    basicInfo.append("\n");
                 }
                 if (!usage.isEmpty()) {
-                    basicInfo.append("Usage: ").append(usage.split("; ")[0]).append("\n\n");
+                    Log.d("MedInfo", "Processing usage: " + usage);
+                    basicInfo.append("\nUsage:\n");
+                    String[] usages = usage.split("; ");
+                    Log.d("MedInfo", "Number of usage items: " + usages.length);
+                    for (String u : usages) {
+                        if (!u.trim().isEmpty()) {
+                            Log.d("MedInfo", "Processing usage item: " + u);
+                            basicInfo.append(formatMedInfoText("• " + u.trim())).append("\n");
+                        }
+                    }
+                    basicInfo.append("\n");
                 }
                 if (!warnings.isEmpty()) {
-                    basicInfo.append("Warning: ").append(warnings.split("; ")[0]).append("\n\n");
+                    Log.d("MedInfo", "Processing warnings: " + warnings);
+                    basicInfo.append("\nWarning:\n");
+                    String[] warningsList = warnings.split("; ");
+                    Log.d("MedInfo", "Number of warning items: " + warningsList.length);
+                    for (String w : warningsList) {
+                        if (!w.trim().isEmpty()) {
+                            Log.d("MedInfo", "Processing warning item: " + w);
+                            basicInfo.append(formatMedInfoText("• " + w.trim())).append("\n");
+                        }
+                    }
+                    basicInfo.append("\n");
                 }
                 
                 textMedicationInfo.setText(basicInfo.toString());
@@ -392,13 +431,36 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                     basicInfo.append("Medication: ").append(medicationName).append("\n\n");
 
                     if (result.purpose != null && !result.purpose.isEmpty()) {
-                        basicInfo.append("Purpose: ").append(result.purpose.get(0)).append("\n\n");
+                        Log.d("MedInfo", "Processing OpenFDA purpose");
+                        basicInfo.append("\nPurpose:\n");
+                        for (String p : result.purpose) {
+                            if (!p.trim().isEmpty()) {
+                                basicInfo.append(formatMedInfoText("• " + p.trim())).append("\n");
+                            }
+                        }
+                        basicInfo.append("\n");
                     }
+
                     if (result.indications_and_usage != null && !result.indications_and_usage.isEmpty()) {
-                        basicInfo.append("Usage: ").append(result.indications_and_usage.get(0)).append("\n\n");
+                        Log.d("MedInfo", "Processing OpenFDA usage");
+                        basicInfo.append("\nUsage:\n");
+                        for (String u : result.indications_and_usage) {
+                            if (!u.trim().isEmpty()) {
+                                basicInfo.append(formatMedInfoText("• " + u.trim())).append("\n");
+                            }
+                        }
+                        basicInfo.append("\n");
                     }
+
                     if (result.warnings != null && !result.warnings.isEmpty()) {
-                        basicInfo.append("Warning: ").append(result.warnings.get(0)).append("\n\n");
+                        Log.d("MedInfo", "Processing OpenFDA warnings");
+                        basicInfo.append("\nWarning:\n");
+                        for (String w : result.warnings) {
+                            if (!w.trim().isEmpty()) {
+                                basicInfo.append(formatMedInfoText("• " + w.trim())).append("\n");
+                            }
+                        }
+                        basicInfo.append("\n");
                     }
 
                     textMedicationInfo.setText(basicInfo.toString());
@@ -547,4 +609,25 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 .setPositiveButton("Close", null)
                 .show();
     }
+
+    // Helper function to format medication info text
+    private String formatMedInfoText(String text) {
+        // 1. Place each bullet on a new line (with a blank line before if not at start)
+        text = text.replaceAll("\\s*•", "\n•");
+    
+        // 2. Add a newline after every colon (:)
+        text = text.replaceAll(":", ":\n");
+    
+        // 3. After a period, insert a newline and "- " only if there's text after it
+        text = text.replaceAll("\\.(\\s*)(?=\\S)", ".\n- ");
+    
+        // 4. Remove any lines that are just a dash (e.g., "\n-")
+        text = text.replaceAll("\n-\\s*(\n|$)", "\n");
+    
+        // 5. Clean up: remove leading dash if it appears at the very start
+        text = text.replaceAll("^\n?-\\s*", "");
+    
+        return text.trim();
+    }
+    
 }
