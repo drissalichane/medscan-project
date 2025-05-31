@@ -7,10 +7,13 @@ import android.content.ContentValues;
 import android.database.Cursor;
 
 import com.example.ocr.model.MedicationResult;
+import com.google.gson.Gson;
+
+import java.util.List;
 
 public class DatabaseHelper extends SQLiteOpenHelper {
     private static final String DATABASE_NAME = "medications.db";
-    private static final int DATABASE_VERSION = 2;
+    private static final int DATABASE_VERSION = 3;
 
     public static final String TABLE_NAME = "medications";
     public static final String COLUMN_ID = "id";
@@ -26,6 +29,17 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     public static final String COLUMN_WHEN_USE = "when_use";
     public static final String COLUMN_ASK_DOCTOR = "ask_doctor";
     public static final String COLUMN_ASK_DOCTOR_PHARMACIST = "ask_doctor_pharmacist";
+
+    // New reminders table constants
+    public static final String TABLE_REMINDERS = "reminders";
+    public static final String COLUMN_REMINDER_ID = "id";
+    public static final String COLUMN_REMINDER_MEDICATION_NAME = "medication_name";
+    public static final String COLUMN_REMINDER_DOSAGE = "dosage";
+    public static final String COLUMN_REMINDER_FREQUENCY = "frequency";
+    public static final String COLUMN_REMINDER_TIMES = "reminder_times";
+    public static final String COLUMN_REMINDER_IS_ACTIVE = "is_active";
+    public static final String COLUMN_REMINDER_NOTES = "notes";
+    public static final String COLUMN_REMINDER_LAST_TAKEN = "last_taken";
 
     private static final String TABLE_CREATE =
             "CREATE TABLE " + TABLE_NAME + " (" +
@@ -43,6 +57,17 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                     COLUMN_ASK_DOCTOR + " TEXT, " +
                     COLUMN_ASK_DOCTOR_PHARMACIST + " TEXT);";
 
+    private static final String TABLE_REMINDERS_CREATE =
+            "CREATE TABLE " + TABLE_REMINDERS + " (" +
+                    COLUMN_REMINDER_ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                    COLUMN_REMINDER_MEDICATION_NAME + " TEXT NOT NULL, " +
+                    COLUMN_REMINDER_DOSAGE + " TEXT, " +
+                    COLUMN_REMINDER_FREQUENCY + " TEXT, " +
+                    COLUMN_REMINDER_TIMES + " TEXT, " + // Store as JSON array of times
+                    COLUMN_REMINDER_IS_ACTIVE + " INTEGER DEFAULT 1, " +
+                    COLUMN_REMINDER_NOTES + " TEXT, " +
+                    COLUMN_REMINDER_LAST_TAKEN + " TEXT);";
+
     public DatabaseHelper(Context context) {
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
     }
@@ -50,13 +75,15 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     @Override
     public void onCreate(SQLiteDatabase db) {
         db.execSQL(TABLE_CREATE);
-
+        db.execSQL(TABLE_REMINDERS_CREATE);
     }
 
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-        db.execSQL("DROP TABLE IF EXISTS " + TABLE_NAME);
-        onCreate(db);
+        if (oldVersion < 3) {
+            // Create reminders table if upgrading from version < 3
+            db.execSQL(TABLE_REMINDERS_CREATE);
+        }
     }
 
     // Insert sample data
@@ -108,5 +135,62 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         SQLiteDatabase db = this.getWritableDatabase();
         db.delete(TABLE_NAME, null, null);
         db.close();
+    }
+
+    // Add new methods for reminders
+    public long insertReminder(String medicationName, String dosage, String frequency, 
+                             List<String> reminderTimes, String notes) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
+        
+        values.put(COLUMN_REMINDER_MEDICATION_NAME, medicationName);
+        values.put(COLUMN_REMINDER_DOSAGE, dosage);
+        values.put(COLUMN_REMINDER_FREQUENCY, frequency);
+        values.put(COLUMN_REMINDER_TIMES, new Gson().toJson(reminderTimes));
+        values.put(COLUMN_REMINDER_IS_ACTIVE, 1);
+        values.put(COLUMN_REMINDER_NOTES, notes);
+        
+        return db.insert(TABLE_REMINDERS, null, values);
+    }
+
+    public Cursor getAllReminders() {
+        SQLiteDatabase db = this.getReadableDatabase();
+        return db.query(TABLE_REMINDERS, null, null, null, null, null, 
+                       COLUMN_REMINDER_MEDICATION_NAME + " ASC");
+    }
+
+    public Cursor getActiveReminders() {
+        SQLiteDatabase db = this.getReadableDatabase();
+        return db.query(TABLE_REMINDERS, null, 
+                       COLUMN_REMINDER_IS_ACTIVE + " = ?", 
+                       new String[]{"1"}, null, null, 
+                       COLUMN_REMINDER_MEDICATION_NAME + " ASC");
+    }
+
+    public int updateReminderStatus(int reminderId, boolean isActive) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put(COLUMN_REMINDER_IS_ACTIVE, isActive ? 1 : 0);
+        
+        return db.update(TABLE_REMINDERS, values, 
+                        COLUMN_REMINDER_ID + " = ?", 
+                        new String[]{String.valueOf(reminderId)});
+    }
+
+    public int updateLastTaken(int reminderId, String timestamp) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put(COLUMN_REMINDER_LAST_TAKEN, timestamp);
+        
+        return db.update(TABLE_REMINDERS, values, 
+                        COLUMN_REMINDER_ID + " = ?", 
+                        new String[]{String.valueOf(reminderId)});
+    }
+
+    public int deleteReminder(int reminderId) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        return db.delete(TABLE_REMINDERS, 
+                        COLUMN_REMINDER_ID + " = ?", 
+                        new String[]{String.valueOf(reminderId)});
     }
 }

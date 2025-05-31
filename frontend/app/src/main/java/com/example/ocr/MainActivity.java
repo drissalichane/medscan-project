@@ -1,9 +1,9 @@
 package com.example.ocr;
 
 import android.Manifest;
+import android.content.ContentValues;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -40,29 +40,27 @@ import com.example.ocr.network.medicamentma.MedicamentMaService;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.navigation.NavigationView;
 import com.google.mlkit.vision.common.InputImage;
-import com.google.mlkit.vision.text.Text;
-import com.google.mlkit.vision.text.TextRecognition;
 import com.google.mlkit.vision.text.TextRecognizer;
+import com.google.mlkit.vision.text.TextRecognition;
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.HashMap;
 
 import com.example.ocr.network.ApiClient;
 import com.example.ocr.network.MedicationService;
 import com.example.ocr.model.OpenFdaResponse;
+
+import org.json.JSONArray;
+
 import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
@@ -76,6 +74,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     private String currentPhotoPath;
     private MedicationService medicationService;
     private DrawerLayout drawerLayout;
+    private Button languageToggleButton;
+    private boolean isFrench = false;
     private NavigationView navigationView;
     private Toolbar toolbar;
     private BackendMedicationService backendMedicationService;
@@ -86,7 +86,33 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // Start TimeTrackerService
+        Intent timeTrackerIntent = new Intent(this, TimeTrackerService.class);
+        startService(timeTrackerIntent);
         setContentView(R.layout.activity_main);
+
+        // Initialize language toggle button
+        languageToggleButton = findViewById(R.id.languageToggleButton);
+        languageToggleButton.setText("EN"); // Default to English
+        languageToggleButton.setEnabled(false); // Disable the button initially
+
+                languageToggleButton.setOnClickListener(v -> {
+            isFrench = !isFrench; // Toggle language
+            languageToggleButton.setText(isFrench ? "FR" : "EN");
+        
+            if (isFrench) {
+                // Display the translated text directly without reformatting
+                translateText(medicationInfoBuilder.toString(), translatedText -> {
+                    runOnUiThread(() -> {
+                        textMedicationInfo.setText(translatedText); // Display translated text directly
+                    });
+                });
+            } else {
+                // Display the original English text with formatting
+                String formattedText = formatMedInfoText(medicationInfoBuilder.toString());
+                textMedicationInfo.setText(formattedText);
+            }
+        });
 
         // Set up toolbar
         toolbar = findViewById(R.id.toolbar);
@@ -156,6 +182,9 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         } else if (id == R.id.nav_nearest_doctor) {
             Intent intent = new Intent(this, NearestDoctorActivity.class);
             startActivity(intent);
+        } else if (id == R.id.nav_reminders) {
+            startActivity(new Intent(this, MedicationRemindersActivity.class));
+            drawerLayout.closeDrawers();
         }
 
         drawerLayout.closeDrawers();
@@ -255,16 +284,21 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         recognizer.process(image)
                 .addOnSuccessListener(visionText -> {
                     String scannedText = visionText.getText();
-                    textResult.setText(scannedText.isEmpty() ? "No text detected." : scannedText);
+                    if (scannedText.isEmpty()) {
+                        textResult.setText("No text detected.");
+                        return;
+                    }
 
-                    // Use GeminiHelper to extract and translate medication name
+                    textResult.setText(scannedText); // Display scanned text directly
+
+                    // Extract medication name from scanned text
                     GeminiHelper geminiHelper = new GeminiHelper();
                     geminiHelper.extractMedicationName(scannedText, new GeminiHelper.GeminiCallback() {
                         @Override
                         public void onSuccess(String medicationName) {
                             runOnUiThread(() -> {
                                 textResult.append("\n\nDetected medication: " + medicationName);
-                                fetchMedicationInfo(medicationName);
+                                fetchMedicationInfo(medicationName); // Fetch medication info
                             });
                         }
 
@@ -282,224 +316,47 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 });
     }
 
-    private List<String> extractValidWords(String scannedText) {
-        List<String> validWords = new ArrayList<>();
-
-        // Split text into words (based on spaces, punctuation)
-        String[] words = scannedText.split("\\s+");
-
-        for (String word : words) {
-            // Remove words that:
-            // 1. Are 2 letters or shorter
-            // 2. Contain special characters like "+"
-            if (word.length() > 2 && !word.matches(".*[+].*")) {
-                validWords.add(word);
-            }
-        }
-        return validWords;
-    }
-
-    private void fetchMedicationInfo(String medicationName) {
+        private void fetchMedicationInfo(String medicationName) {
         Log.d("MedInfo", "Starting fetchMedicationInfo for: " + medicationName);
-        // First check if medication exists in local database
-        DatabaseHelper databaseHelper = new DatabaseHelper(this);
-        Cursor cursor = databaseHelper.getMedicationInfo(medicationName);
-        
-        Log.d("MedInfo", "Database query completed. Cursor null? " + (cursor == null));
-        
-        if (cursor != null && cursor.moveToFirst()) {
-            Log.d("MedInfo", "Found medication in database");
-            // Get the data from cursor
-            String purpose = cursor.getString(cursor.getColumnIndex(DatabaseHelper.COLUMN_PURPOSE));
-            String usage = cursor.getString(cursor.getColumnIndex(DatabaseHelper.COLUMN_USAGE));
-            String warnings = cursor.getString(cursor.getColumnIndex(DatabaseHelper.COLUMN_WARNINGS));
-            
-            Log.d("MedInfo", "Retrieved from DB - Purpose: " + purpose);
-            Log.d("MedInfo", "Retrieved from DB - Usage: " + usage);
-            Log.d("MedInfo", "Retrieved from DB - Warnings: " + warnings);
-            
-            // Check if we have valid data (not placeholder data)
-            if (purpose != null && !purpose.isEmpty() && !purpose.contains("scanned medication") &&
-                usage != null && !usage.isEmpty() && !usage.contains("scanned medication") &&
-                warnings != null && !warnings.isEmpty() && !warnings.contains("side effect will be updated")) {
-                
-                Log.d("MedInfo", "Data validation passed - proceeding with display");
-                // We have valid cached data, display it
-                StringBuilder basicInfo = new StringBuilder();
-                basicInfo.append("Medication: ").append(medicationName).append("\n\n");
-                
-                if (!purpose.isEmpty()) {
-                    Log.d("MedInfo", "Processing purpose: " + purpose);
-                    basicInfo.append("\nPurpose:\n");
-                    String[] purposes = purpose.split("; ");
-                    Log.d("MedInfo", "Number of purpose items: " + purposes.length);
-                    for (String p : purposes) {
-                        if (!p.trim().isEmpty()) {
-                            Log.d("MedInfo", "Processing purpose item: " + p);
-                            basicInfo.append(formatMedInfoText("• " + p.trim())).append("\n");
-                        }
-                    }
-                    basicInfo.append("\n");
-                }
-                if (!usage.isEmpty()) {
-                    Log.d("MedInfo", "Processing usage: " + usage);
-                    basicInfo.append("\nUsage:\n");
-                    String[] usages = usage.split("; ");
-                    Log.d("MedInfo", "Number of usage items: " + usages.length);
-                    for (String u : usages) {
-                        if (!u.trim().isEmpty()) {
-                            Log.d("MedInfo", "Processing usage item: " + u);
-                            basicInfo.append(formatMedInfoText("• " + u.trim())).append("\n");
-                        }
-                    }
-                    basicInfo.append("\n");
-                }
-                if (!warnings.isEmpty()) {
-                    Log.d("MedInfo", "Processing warnings: " + warnings);
-                    basicInfo.append("\nWarning:\n");
-                    String[] warningsList = warnings.split("; ");
-                    Log.d("MedInfo", "Number of warning items: " + warningsList.length);
-                    for (String w : warningsList) {
-                        if (!w.trim().isEmpty()) {
-                            Log.d("MedInfo", "Processing warning item: " + w);
-                            basicInfo.append(formatMedInfoText("• " + w.trim())).append("\n");
-                        }
-                    }
-                    basicInfo.append("\n");
-                }
-                
-                textMedicationInfo.setText(basicInfo.toString());
-                Toast.makeText(MainActivity.this, "Showing cached information", Toast.LENGTH_SHORT).show();
-                cursor.close();
-                return;
-            }
-            // If we have placeholder data, close cursor and continue to OpenFDA
-            cursor.close();
-        }
-
-        // If not in database or has placeholder data, fetch from OpenFDA
+    
+        // Fetch medication info from OpenFDA
         String query = "spl_product_data_elements:" + medicationName + "*";
-
+    
         Call<OpenFdaResponse> call = medicationService.getMedicationInfo(query);
         call.enqueue(new Callback<OpenFdaResponse>() {
             @Override
             public void onResponse(Call<OpenFdaResponse> call, Response<OpenFdaResponse> response) {
                 if (response.isSuccessful() && response.body() != null && response.body().results != null && !response.body().results.isEmpty()) {
                     MedicationResult result = response.body().results.get(0);
-                    
+    
                     // Clear previous content
                     textMedicationInfo.setText("");
                     medicationInfoBuilder.setLength(0);
-                    
-                    // Store all information in the builder for later use
-                    if (result.purpose != null) {
-                        medicationInfoBuilder.append("Purpose:").append(String.join("; ", result.purpose)).append("\n");
-                    }
-                    if (result.indications_and_usage != null) {
-                        medicationInfoBuilder.append("Indications:").append(String.join("; ", result.indications_and_usage)).append("\n");
-                    }
-                    if (result.warnings != null) {
-                        medicationInfoBuilder.append("Warnings:").append(String.join("; ", result.warnings)).append("\n");
-                    }
-                    if (result.precautions != null) {
-                        medicationInfoBuilder.append("Precautions:").append(String.join("; ", result.precautions)).append("\n");
-                    }
-                    if (result.adverse_reactions != null) {
-                        medicationInfoBuilder.append("Adverse reactions:").append(String.join("; ", result.adverse_reactions)).append("\n");
-                    }
-                    if (result.overdosage != null) {
-                        medicationInfoBuilder.append("Overdosage:").append(String.join("; ", result.overdosage)).append("\n");
-                    }
-                    if (result.do_not_use != null) {
-                        medicationInfoBuilder.append("Do not use:").append(String.join("; ", result.do_not_use)).append("\n");
-                    }
-                    if (result.stop_use != null) {
-                        medicationInfoBuilder.append("Stop use:").append(String.join("; ", result.stop_use)).append("\n");
-                    }
-                    if (result.when_use != null) {
-                        medicationInfoBuilder.append("When to use:").append(String.join("; ", result.when_use)).append("\n");
-                    }
-                    if (result.ask_doctor != null) {
-                        medicationInfoBuilder.append("Ask doctor:").append(String.join("; ", result.ask_doctor)).append("\n");
-                    }
-                    if (result.ask_doctor_or_pharmacist != null) {
-                        medicationInfoBuilder.append("Ask doctor or pharmacist:").append(String.join("; ", result.ask_doctor_or_pharmacist)).append("\n");
-                    }
-
-                    // Display basic information in the TextView
-                    StringBuilder basicInfo = new StringBuilder();
-                    basicInfo.append("Medication: ").append(medicationName).append("\n\n");
-
+    
+                    // Build the medication info string
+                    StringBuilder rawMedicationInfo = new StringBuilder();
                     if (result.purpose != null && !result.purpose.isEmpty()) {
-                        Log.d("MedInfo", "Processing OpenFDA purpose");
-                        basicInfo.append("\nPurpose:\n");
-                        for (String p : result.purpose) {
-                            if (!p.trim().isEmpty()) {
-                                basicInfo.append(formatMedInfoText("• " + p.trim())).append("\n");
-                            }
-                        }
-                        basicInfo.append("\n");
+                        rawMedicationInfo.append("\nPurpose:\n").append(String.join("; ", result.purpose)).append("\n");
                     }
-
                     if (result.indications_and_usage != null && !result.indications_and_usage.isEmpty()) {
-                        Log.d("MedInfo", "Processing OpenFDA usage");
-                        basicInfo.append("\nUsage:\n");
-                        for (String u : result.indications_and_usage) {
-                            if (!u.trim().isEmpty()) {
-                                basicInfo.append(formatMedInfoText("• " + u.trim())).append("\n");
-                            }
-                        }
-                        basicInfo.append("\n");
+                        rawMedicationInfo.append("\nUsage:\n").append(String.join("; ", result.indications_and_usage)).append("\n");
                     }
-
                     if (result.warnings != null && !result.warnings.isEmpty()) {
-                        Log.d("MedInfo", "Processing OpenFDA warnings");
-                        basicInfo.append("\nWarning:\n");
-                        for (String w : result.warnings) {
-                            if (!w.trim().isEmpty()) {
-                                basicInfo.append(formatMedInfoText("• " + w.trim())).append("\n");
-                            }
-                        }
-                        basicInfo.append("\n");
+                        rawMedicationInfo.append("\nWarnings:\n").append(String.join("; ", result.warnings)).append("\n");
                     }
-
-                    textMedicationInfo.setText(basicInfo.toString());
-
-                    // Save to database after displaying
-                    SQLiteDatabase db = databaseHelper.getWritableDatabase();
-                    try {
-                        Log.d("SQL insert", "Attempting to insert medication: " + medicationName);
-                        Log.d("SQL insert", "Purpose: " + (result.purpose != null ? String.join("; ", result.purpose) : "null"));
-                        Log.d("SQL insert", "Usage: " + (result.indications_and_usage != null ? String.join("; ", result.indications_and_usage) : "null"));
-                        Log.d("SQL insert", "Warnings: " + (result.warnings != null ? String.join("; ", result.warnings) : "null"));
-                        
-                        long insertId = databaseHelper.insertMedication(db, medicationName, result);
-                        Log.d("SQL insert", "Insert successful with ID: " + insertId);
-                        
-                        // Verify the insert
-                        Cursor verifyCursor = databaseHelper.getMedicationInfo(medicationName);
-                        if (verifyCursor != null && verifyCursor.moveToFirst()) {
-                            Log.d("SQL insert", "Verified data in database:");
-                            Log.d("SQL insert", "Name: " + verifyCursor.getString(verifyCursor.getColumnIndex(DatabaseHelper.COLUMN_NAME)));
-                            Log.d("SQL insert", "Purpose: " + verifyCursor.getString(verifyCursor.getColumnIndex(DatabaseHelper.COLUMN_PURPOSE)));
-                            Log.d("SQL insert", "Usage: " + verifyCursor.getString(verifyCursor.getColumnIndex(DatabaseHelper.COLUMN_USAGE)));
-                            Log.d("SQL insert", "Warnings: " + verifyCursor.getString(verifyCursor.getColumnIndex(DatabaseHelper.COLUMN_WARNINGS)));
-                            verifyCursor.close();
-                        } else {
-                            Log.e("SQL insert", "Failed to verify inserted data");
-                        }
-                    } catch (Exception e) {
-                        Log.e("SQL insert", "Error inserting medication: " + e.getMessage());
-                        e.printStackTrace();
-                    }
-
-                    // Show a toast to indicate more information is available
-                    Toast.makeText(MainActivity.this, "Medication information saved to cache", Toast.LENGTH_LONG).show();
+    
+                    // Format and display the English text
+                    String formattedText = formatMedInfoText(rawMedicationInfo.toString());
+                    medicationInfoBuilder.append(formattedText);
+                    runOnUiThread(() -> {
+                        textMedicationInfo.setText(formattedText);
+                        languageToggleButton.setEnabled(true); // Enable the language toggle button
+                    });
                 } else {
                     textMedicationInfo.setText("No matches found for: " + medicationName);
                 }
             }
-
+    
             @Override
             public void onFailure(Call<OpenFdaResponse> call, Throwable t) {
                 Log.e("OpenFDA", "API call failed", t);
@@ -508,58 +365,41 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         });
     }
 
-    // New method to fetch medication info from backend
-    private void fetchMedicationInfoFromBackend(String medicationName) {
-        backendMedicationService.getAllMedications().enqueue(new Callback<List<BackendMedicationResult>>() {
-            @Override
-            public void onResponse(Call<List<BackendMedicationResult>> call, Response<List<BackendMedicationResult>> response) {
-                if (response.isSuccessful() && response.body() != null) {
-                    List<BackendMedicationResult> medications = response.body();
-                    boolean found = false;
-                    for (BackendMedicationResult med : medications) {
-                        if (med.getName() != null && med.getName().equalsIgnoreCase(medicationName)) {
-                            found = true;
-                            medicationInfoBuilder.append("\nValid Medication: ").append(med.getName()).append(" (from Backend)");
-                            if (med.getSideEffects() != null)
-                                medicationInfoBuilder.append("\nSide Effects: ").append(med.getSideEffects());
-                            if (med.getInteractions() != null)
-                                medicationInfoBuilder.append("\nInteractions: ").append(med.getInteractions());
-                            break;
-                        }
-                    }
-                    if (!found) {
-                        medicationInfoBuilder.append("\nNo matches found for: ").append(medicationName);
-                    }
-                } else {
-                    medicationInfoBuilder.append("\nNo matches found for: ").append(medicationName);
-                }
-            }
-
-            @Override
-            public void onFailure(Call<List<BackendMedicationResult>> call, Throwable t) {
-                Log.e("BackendAPI", "API call failed", t);
-            }
-        });
+      private void saveToDatabase(String medicationName, String formattedText) {
+        DatabaseHelper databaseHelper = new DatabaseHelper(this);
+        SQLiteDatabase db = databaseHelper.getWritableDatabase();
+    
+        ContentValues values = new ContentValues();
+        values.put(DatabaseHelper.COLUMN_NAME, medicationName); // Use the correct column name for medication name
+        values.put(DatabaseHelper.COLUMN_PURPOSE, formattedText); // Save formatted text in the appropriate column (e.g., purpose)
+    
+        long rowId = db.insert(DatabaseHelper.TABLE_NAME, null, values);
+        if (rowId != -1) {
+            Log.d("Database", "Medication info saved successfully: " + medicationName);
+        } else {
+            Log.e("Database", "Failed to save medication info: " + medicationName);
+        }
+    
+        db.close();
     }
 
-    // New method to fetch medication info from medicament.ma backend
-    private void fetchMedicationInfoFromMedicamentMa(String medicationName) {
-        medicamentMaService.getMedicationInfo(medicationName).enqueue(new Callback<String>() {
-            @Override
-            public void onResponse(Call<String> call, Response<String> response) {
-                if (response.isSuccessful() && response.body() != null) {
-                    String data = response.body();
-                    medicationInfoBuilder.append("\nMedicament.ma data for ").append(medicationName).append(":\n").append(data);
-                } else {
-                    medicationInfoBuilder.append("\nNo medicament.ma data found for: ").append(medicationName);
-                }
-            }
+    private String formatMedInfoText(String text) {
+        // 1. Place each bullet on a new line (with a blank line before if not at start)
+        text = text.replaceAll("\\s*•", "\n•");
 
-            @Override
-            public void onFailure(Call<String> call, Throwable t) {
-                Log.e("MedicamentMaAPI", "API call failed", t);
-            }
-        });
+        // 2. Add a newline after every colon (:)
+        text = text.replaceAll(":", ":\n");
+
+        // 3. After a period, insert a newline and "- " only if there's text after it
+        text = text.replaceAll("\\.(\\s*)(?=\\S)", ".\n\n- ");
+
+        // 4. Remove any lines that are just a dash (e.g., "\n-")
+        text = text.replaceAll("\n-\\s*(\n|$)", "\n");
+
+        // 5. Clean up: remove leading dash if it appears at the very start
+        text = text.replaceAll("^\n?-\\s*", "");
+
+        return text.trim();
     }
 
     private void showMessageDialog(String message) {
@@ -610,24 +450,61 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 .show();
     }
 
-    // Helper function to format medication info text
-    private String formatMedInfoText(String text) {
-        // 1. Place each bullet on a new line (with a blank line before if not at start)
-        text = text.replaceAll("\\s*•", "\n•");
-    
-        // 2. Add a newline after every colon (:)
-        text = text.replaceAll(":", ":\n");
-    
-        // 3. After a period, insert a newline and "- " only if there's text after it
-        text = text.replaceAll("\\.(\\s*)(?=\\S)", ".\n- ");
-    
-        // 4. Remove any lines that are just a dash (e.g., "\n-")
-        text = text.replaceAll("\n-\\s*(\n|$)", "\n");
-    
-        // 5. Clean up: remove leading dash if it appears at the very start
-        text = text.replaceAll("^\n?-\\s*", "");
-    
-        return text.trim();
+               private void translateText(String textToTranslate, TranslationCallback callback) {
+                String apiEndpoint = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=fr&dt=t&q=" + Uri.encode(textToTranslate);
+                okhttp3.OkHttpClient client = new okhttp3.OkHttpClient();
+            
+                Log.d("Translation", "API Endpoint: " + apiEndpoint); // Log the API endpoint
+            
+                okhttp3.Request request = new okhttp3.Request.Builder()
+                        .url(apiEndpoint)
+                        .get()
+                        .build();
+            
+                client.newCall(request).enqueue(new okhttp3.Callback() {
+                    @Override
+                    public void onFailure(okhttp3.Call call, IOException e) {
+                        Log.e("Translation", "Translation failed: " + e.getMessage(), e);
+                        runOnUiThread(() -> Toast.makeText(MainActivity.this, "Translation failed", Toast.LENGTH_SHORT).show());
+                    }
+            
+                    @Override
+                    public void onResponse(okhttp3.Call call, okhttp3.Response response) throws IOException {
+                        Log.d("Translation", "Response Code: " + response.code()); // Log the response code
+                        Log.d("Translation", "Response Message: " + response.message()); // Log the response message
+            
+                        if (!response.isSuccessful()) {
+                            runOnUiThread(() -> Toast.makeText(MainActivity.this, "Translation failed: Unsuccessful response", Toast.LENGTH_SHORT).show());
+                            return;
+                        }
+            
+                        String responseString = response.body().string();
+                        Log.d("Translation", "Response Body: " + responseString); // Log the response body
+            
+                        try {
+                            // Parse the response using JSON
+                            JSONArray responseArray = new JSONArray(responseString);
+                            JSONArray translationsArray = responseArray.getJSONArray(0); // Main translations array
+            
+                            StringBuilder translatedTextBuilder = new StringBuilder();
+                            for (int i = 0; i < translationsArray.length(); i++) {
+                                JSONArray translationItem = translationsArray.getJSONArray(i);
+                                String translation = translationItem.getString(0); // Extract the actual translation
+                                translatedTextBuilder.append(translation).append("\n\n");
+                            }
+            
+                            String translatedText = translatedTextBuilder.toString().trim();
+                            Log.d("Translation", "Extracted Translation: " + translatedText); // Log the extracted translation
+                            runOnUiThread(() -> callback.onTranslationComplete(translatedText));
+                        } catch (Exception e) {
+                            Log.e("Translation", "Error parsing translation response", e);
+                            runOnUiThread(() -> Toast.makeText(MainActivity.this, "Translation failed: Could not parse response", Toast.LENGTH_SHORT).show());
+                        }
+                    }
+                });
+            }
+    // Callback interface for translation
+    interface TranslationCallback {
+        void onTranslationComplete(String translatedText);
     }
-    
 }

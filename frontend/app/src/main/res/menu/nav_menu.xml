@@ -16,6 +16,10 @@
             android:icon="@android:drawable/ic_menu_recent_history"
             android:title="Scanned Medications" />
         <item
+            android:id="@+id/nav_reminders"
+            android:icon="@android:drawable/ic_menu_agenda"
+            android:title="Medication Reminders" />
+        <item
             android:id="@+id/nav_chatbot"
             android:icon="@drawable/a"
             android:title="Doctor Chatbot" />
