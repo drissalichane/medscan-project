@@ -88,18 +88,18 @@ JSOUP – Web scraping for doctor listings.
 
 📦 Technologies Used
 
-Component	Technology
-OCR	Google ML Kit
-AI Integration	Google Gemini AI
-API Communication	Retrofit
-JSON Parsing	Gson
-Local Storage	SQLite
-Backend Framework	Spring Boot
-DB Management	PostgreSQL, SQLite
-Geolocation	Google Maps API
-Web Scraping	JSoup
-Data Layer	Spring Data JPA
-Translation	Google Translate API
+Component	Technology,
+OCR	Google ML Kit,
+AI Integration	Google Gemini AI,
+API Communication	Retrofit,
+JSON Parsing	Gson,
+Local Storage	SQLite,
+Backend Framework	Spring Boot,
+DB Management	PostgreSQL, SQLite,
+Geolocation	Google Maps API,
+Web Scraping	JSoup,
+Data Layer	Spring Data JPA,
+Translation	Google Translate API,
 
 📖 Usage Examples
 ✅ Scanning a Medication
