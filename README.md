@@ -38,7 +38,8 @@ Filters doctors by specialty.
 
 Scrapes data from doctori.ma using JSOUP.
 
-Displays contact info, address, and links to detailed profiles.
+Displays contact info, address, and links to detailed profiles.![Uploading image.png…]()
+
 
 ⏰ Medication Reminders
 Users set reminders with:
@@ -86,6 +87,7 @@ Google Maps API – Location services.
 JSOUP – Web scraping for doctor listings.
 
 📦 Technologies Used
+
 Component	Technology
 OCR	Google ML Kit
 AI Integration	Google Gemini AI
